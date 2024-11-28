@@ -1,0 +1,12 @@
+CORS_ORIGIN = *
+PORT = 1250
+
+# MONGODB_URL = mongodb+srv://skylapx7:Skylap123@cluster0.vgu9e.mongodb.net
+
+MONGODB_URL = mongodb+srv://ronorono251:Rohan123@cluster0.x8larth.mongodb.net
+
+
+ACCESS_TOKEN_SECRET = **!!..MyVeryOwnAccessTokenSecretFile..!!**
+ACCESS_TOKEN_EXPIRY = 1d
+REFRESH_TOKEN_SECRET = **!!..MyVeryOwnRefreshTokenSecretFile..!!**
+REFRESH_TOKEN_EXPIRY = 10d
