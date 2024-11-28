@@ -11,7 +11,7 @@ const router = Router();
 
 router.route("/create").post(verifyJWT, create);
 router.route("/create-admin").post(createAdmin);
-router.route("/login").get(login);
+router.route("/login").post(login);
 router.route("/change-password").put(verifyJWT, changePassword);
 
 export default router;
