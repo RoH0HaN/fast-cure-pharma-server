@@ -50,7 +50,7 @@ const updateAttendanceOfHrOh = async (empId) => {
 
     if (existingAttendance) {
       let updated = false;
-      let attendanceObj = existingAttendance.attendance;
+      let attendanceObj = existingAttendance._doc.attendance; //check later
 
       if (attendanceObj[year]) {
         if (attendanceObj[year][month]) {
@@ -388,7 +388,7 @@ const login = asyncHandler(async (req, res) => {
     return res
       .status(201)
       .cookie("token", accessToken, options)
-      .json(new ApiRes(201, { accessToken, ...user }, "Login success."));
+      .json(new ApiRes(201, { accessToken, ...user._doc }, "Login success."));
   } catch (error) {
     Logger(error, "error");
     return res
