@@ -212,7 +212,7 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
 
     if (!places.length) {
       // If no places found, return a 404 error
-      return res.status(404).json(new ApiRes(404, null, "Places not found."));
+      return res.status(200).json(new ApiRes(200, [], "Places not found."));
     }
 
     // Transform the result to replace `headquarter` with its `name`
