@@ -205,18 +205,28 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Fetch places associated with the given headquarter, selecting only the required fields
-    const places = await Place.find({ headquarter: _id }).select("name type");
+    // Fetch places associated with the given headquarter
+    const places = await Place.find({ headquarter: _id })
+      .select("name type headquarter")
+      .populate("headquarter", "name");
 
     if (!places.length) {
       // If no places found, return a 404 error
       return res.status(404).json(new ApiRes(404, null, "Places not found."));
     }
 
-    // Return the fetched places with a success message
+    // Transform the result to replace `headquarter` with its `name`
+    const transformedPlaces = places.map((place) => ({
+      _id: place._id,
+      name: place.name,
+      type: place.type,
+      headquarter: place.headquarter.name, // Extract the name from the populated headquarter
+    }));
+
+    // Return the transformed places with a success message
     return res
       .status(200)
-      .json(new ApiRes(200, places, "Places fetched successfully."));
+      .json(new ApiRes(200, transformedPlaces, "Places fetched successfully."));
   } catch (error) {
     // Log the error and return a 500 internal server error
     Logger(error, "error");
@@ -318,10 +328,10 @@ const deletePlace = asyncHandler(async (req, res) => {
 });
 
 const editPlace = asyncHandler(async (req, res) => {
-  const { _id, name } = req.body; // Extract place ID and new name from request body
+  const { _id, name, type } = req.body; // Extract place ID and new name from request body
 
   // Validate the required parameters `_id` and `name`
-  if (validateFields(req.body, ["_id", "name"], res)) {
+  if (!validateFields(req.body, ["_id", "name", "type"], res)) {
     return; // If validation fails, return an error response
   }
 
@@ -337,13 +347,13 @@ const editPlace = asyncHandler(async (req, res) => {
     // Update the place name by its ID
     const updatedPlace = await Place.findByIdAndUpdate(
       _id,
-      { name }, // Only update the name field
+      { name, type }, // Only update the name field
       { new: true } // Return the updated document
     );
 
     // Log the successful update for auditing purposes
     Logger(
-      `Place ${place.name} with ID ${_id} updated to ${updatedPlace.name} successfully.`,
+      `Place ${place.name} with ID ${_id} updated to ${updatedPlace.name}[${updatedPlace.type}] successfully.`,
       "info"
     );
 
@@ -354,7 +364,7 @@ const editPlace = asyncHandler(async (req, res) => {
         new ApiRes(
           200,
           null,
-          `Place ${place.name} updated to ${updatedPlace.name} successfully.`
+          `Place ${place.name} updated to ${updatedPlace.name}[${updatedPlace.type}] successfully.`
         )
       );
   } catch (error) {

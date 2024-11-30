@@ -16,8 +16,8 @@ router.route("/create-headquarter").post(verifyJWT, createHeadquarter);
 router.route("/create-places").post(verifyJWT, createPlaces);
 router
   .route("/get-places-by-headquarter/:_id")
-  .post(verifyJWT, getPlacesByHeadquarter);
-router.route("/edit-place/:_id").post(verifyJWT, editPlace);
+  .get(verifyJWT, getPlacesByHeadquarter);
+router.route("/edit-place").put(verifyJWT, editPlace);
 router.route("/delete-place/:_id").delete(verifyJWT, deletePlace);
 router.route("/delete-headquarter/:_id").delete(verifyJWT, deleteHeadquarter);
 router
