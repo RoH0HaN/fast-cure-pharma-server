@@ -636,4 +636,33 @@ const changePassword = asyncHandler(async (req, res) => {
   }
 });
 
-export { create, createAdmin, login, changePassword, update, view };
+const archive = asyncHandler(async (req, res) => {
+  const _id = req.params._id;
+
+  if (validateFields(req.params, ["_id"], res) !== true) {
+    return;
+  }
+  if (req.user.role !== "ADMIN") {
+    return res
+      .status(403)
+      .json(
+        new ApiRes(403, null, "You are not authorized to perform this action.")
+      );
+  }
+  try {
+    const user = await User.findById(_id);
+    if (!user) {
+      return res.status(404).json(new ApiRes(404, null, "User not found."));
+    }
+    user.isArchived = true;
+    await user.save();
+    return res.status(200).json(new ApiRes(200, user, "User archived."));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
+export { create, createAdmin, login, changePassword, update, view, archive };

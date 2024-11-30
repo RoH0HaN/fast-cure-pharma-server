@@ -38,7 +38,7 @@ const createHeadquarter = asyncHandler(async (req, res) => {
   }
 });
 
-const createPlace = asyncHandler(async (req, res) => {
+const createPlaces = asyncHandler(async (req, res) => {
   const { places, headquarter } = req.body;
 
   // Validate required fields
@@ -234,4 +234,4 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
   }
 });
 
-export { createHeadquarter, createPlace, getAllHeadquartersByRole };
+export { createHeadquarter, createPlaces, getAllHeadquartersByRole };
