@@ -21,7 +21,7 @@ const placeSchema = new Schema({
   },
   type: {
     type: String,
-    enum: ["OUT", "EX", "HILL-EX", "HILL-OUT"],
+    enum: ["HILL", "OUT", "EX", "HILL-EX", "HILL-OUT"],
     required: true,
   },
 });

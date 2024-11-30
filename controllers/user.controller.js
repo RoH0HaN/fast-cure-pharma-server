@@ -483,7 +483,11 @@ const update = asyncHandler(async (req, res) => {
 });
 
 const view = asyncHandler(async (req, res) => {
-  const { _id } = req.params;
+  const _id = req.params._id;
+
+  if (!_id) {
+    return res.status(400).json(new ApiRes(400, null, "User ID is required."));
+  }
 
   try {
     // Check if the user exists
@@ -639,9 +643,10 @@ const changePassword = asyncHandler(async (req, res) => {
 const archive = asyncHandler(async (req, res) => {
   const _id = req.params._id;
 
-  if (validateFields(req.params, ["_id"], res) !== true) {
-    return;
+  if (!_id) {
+    return res.status(400).json(new ApiRes(400, null, "User ID is required."));
   }
+
   if (req.user.role !== "ADMIN") {
     return res
       .status(403)

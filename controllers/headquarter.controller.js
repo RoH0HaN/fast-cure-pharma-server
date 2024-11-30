@@ -121,33 +121,7 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
 
     if (role === "ADMIN") {
       // Fetch all headquarters with their associated places for ADMIN role
-      headquarters = await Headquarter.aggregate([
-        {
-          $lookup: {
-            from: "places", // Join with 'places' collection
-            localField: "places", // Match 'places' field in headquarters
-            foreignField: "_id", // Match '_id' in 'places' collection
-            as: "places", // Output array field name
-          },
-        },
-        {
-          $project: {
-            _id: 1,
-            name: 1,
-            places: {
-              $map: {
-                input: "$places",
-                as: "place",
-                in: {
-                  _id: "$$place._id",
-                  name: "$$place.name",
-                  type: "$$place.type",
-                },
-              },
-            },
-          },
-        },
-      ]);
+      headquarters = await Headquarter.find({}).select("name type _id");
     } else {
       // Fetch user-specific headquarter and downline hierarchy
       const user = await User.findById(_id).select(
@@ -164,11 +138,7 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
             headquarters.push({
               _id: hq._id,
               name: hq.name,
-              places: hq.places.map((place) => ({
-                _id: place._id,
-                name: place.name,
-                type: place.type,
-              })),
+              type: hq.type,
             });
             headquarterSet.add(hq._id.toString());
           }
@@ -178,12 +148,7 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
       // Fetch and add the user's direct headquarter
       const userHeadquarters = await Headquarter.find({
         name: user.headquarter,
-      })
-        .select("name places _id")
-        .populate({
-          path: "places",
-          select: "name type _id",
-        });
+      }).select("name type _id");
 
       addUniqueHeadquarter(userHeadquarters);
 
@@ -197,12 +162,7 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
           // Fetch headquarters for the current employee
           const employeeHeadquarters = await Headquarter.find({
             name: employee.headquarter,
-          })
-            .select("name places _id")
-            .populate({
-              path: "places",
-              select: "name type _id",
-            });
+          }).select("name type _id");
 
           addUniqueHeadquarter(employeeHeadquarters);
 
@@ -234,4 +194,186 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
   }
 });
 
-export { createHeadquarter, createPlaces, getAllHeadquartersByRole };
+const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
+  const _id = req.params._id; // Extract headquarter ID from request parameters
+
+  // Validate the required parameter `_id`
+  if (!_id) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Headquarter ID is required."));
+  }
+
+  try {
+    // Fetch places associated with the given headquarter, selecting only the required fields
+    const places = await Place.find({ headquarter: _id }).select("name type");
+
+    if (!places.length) {
+      // If no places found, return a 404 error
+      return res.status(404).json(new ApiRes(404, null, "Places not found."));
+    }
+
+    // Return the fetched places with a success message
+    return res
+      .status(200)
+      .json(new ApiRes(200, places, "Places fetched successfully."));
+  } catch (error) {
+    // Log the error and return a 500 internal server error
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const deleteHeadquarter = asyncHandler(async (req, res) => {
+  const _id = req.params._id; // Extract headquarter ID from request parameters
+
+  // Validate the required parameter `_id`
+  if (!_id) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Headquarter ID is required."));
+  }
+
+  try {
+    // Use `findById` first to check if the headquarter exists
+    const headquarter = await Headquarter.findById(_id);
+
+    if (!headquarter) {
+      // If headquarter doesn't exist, return a 404 error
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, "Headquarter not found."));
+    }
+
+    // Delete associated places in one operation using their reference to the headquarter
+    const deletePlaces = Place.deleteMany({ headquarter: _id });
+
+    // Delete the headquarter
+    const deleteHeadquarter = Headquarter.findByIdAndDelete(_id);
+
+    // Run both deletions concurrently for better performance
+    await Promise.all([deletePlaces, deleteHeadquarter]);
+
+    // Log success and return a success response
+    Logger(
+      `Headquarter ${headquarter.name} with ID ${_id} deleted successfully.`,
+      "info"
+    );
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `Headquarter ${headquarter.name} deleted successfully.`
+        )
+      );
+  } catch (error) {
+    // Log the error and return a 500 internal server error
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const deletePlace = asyncHandler(async (req, res) => {
+  const _id = req.params._id; // Extract place ID from request parameters
+
+  // Validate the required parameter `_id`
+  if (!_id) {
+    return res.status(400).json(new ApiRes(400, null, "Place ID is required."));
+  }
+
+  try {
+    // Check if the place exists by finding it using its ID
+    const place = await Place.findById(_id);
+
+    if (!place) {
+      // If place doesn't exist, return a 404 error
+      return res.status(404).json(new ApiRes(404, null, "Place not found."));
+    }
+
+    // Delete the place by its ID
+    await Place.findByIdAndDelete(_id);
+
+    // Log the deletion event for auditing purposes
+    Logger(`Place ${place.name} with ID ${_id} deleted successfully.`, "info");
+
+    // Return a success response indicating the place was deleted
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, `Place ${place.name} deleted successfully.`));
+  } catch (error) {
+    // Log the error for debugging and troubleshooting
+    Logger(error, "error");
+
+    // Return a 500 internal server error response if an exception occurs
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const editPlace = asyncHandler(async (req, res) => {
+  const { _id, name } = req.body; // Extract place ID and new name from request body
+
+  // Validate the required parameters `_id` and `name`
+  if (validateFields(req.body, ["_id", "name"], res)) {
+    return; // If validation fails, return an error response
+  }
+
+  try {
+    // Check if the place exists by finding it using its ID
+    const place = await Place.findById(_id);
+
+    if (!place) {
+      // If place doesn't exist, return a 404 error
+      return res.status(404).json(new ApiRes(404, null, "Place not found."));
+    }
+
+    // Update the place name by its ID
+    const updatedPlace = await Place.findByIdAndUpdate(
+      _id,
+      { name }, // Only update the name field
+      { new: true } // Return the updated document
+    );
+
+    // Log the successful update for auditing purposes
+    Logger(
+      `Place ${place.name} with ID ${_id} updated to ${updatedPlace.name} successfully.`,
+      "info"
+    );
+
+    // Return a success response with the updated place data
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `Place ${place.name} updated to ${updatedPlace.name} successfully.`
+        )
+      );
+  } catch (error) {
+    // Log the error for debugging and troubleshooting
+    Logger(error, "error");
+
+    // Return a 500 internal server error response if an exception occurs
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+export {
+  createHeadquarter,
+  createPlaces,
+  getAllHeadquartersByRole,
+  getPlacesByHeadquarter,
+  deleteHeadquarter,
+  deletePlace,
+  editPlace,
+};
