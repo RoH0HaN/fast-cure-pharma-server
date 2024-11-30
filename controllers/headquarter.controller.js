@@ -5,7 +5,7 @@ import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 
 const createHeadquarter = asyncHandler(async (req, res) => {
-  const { name } = req.query;
+  const { name } = req.body;
 
   if (!name) {
     return res
