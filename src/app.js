@@ -18,10 +18,12 @@ app.use(cookieParser());
 
 // Route Imports
 import userRoutes from "../routes/user.routes.js";
+import headquarterRoutes from "../routes/headquarter.routes.js";
 
 // Routes
 const apiV1 = "/api/v1";
 
 app.use(`${apiV1}/users`, userRoutes);
+app.use(`${apiV1}/headquarters`, headquarterRoutes);
 
 export { app };

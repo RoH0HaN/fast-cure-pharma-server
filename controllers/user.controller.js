@@ -288,6 +288,225 @@ const create = asyncHandler(async (req, res) => {
   }
 });
 
+const update = asyncHandler(async (req, res) => {
+  const {
+    _id,
+    empId,
+    role,
+    parentRole,
+    parentName,
+    name,
+    password,
+    email,
+    mobile,
+    headquarter,
+    pan,
+    aadhaar,
+    fatherName,
+    address,
+    hq,
+    ex,
+    out,
+    hillEx,
+    hillOut,
+    tAll,
+    iAll,
+    basic,
+    hra,
+    conAll,
+    eduAll,
+    speAll,
+    medAll,
+    mobileAll,
+    dateOfBirth,
+    dateOfJoining,
+    parentId,
+    pfNo,
+    bankAccNo,
+    ifscCode,
+    esiNo,
+  } = req.body;
+
+  // Validate required fields
+  if (
+    validateFields(
+      req.body,
+      [
+        "_id",
+        "empId",
+        "role",
+        "parentRole",
+        "parentName",
+        "name",
+        "password",
+        "email",
+        "mobile",
+        "headquarter",
+        "pan",
+        "aadhaar",
+        "fatherName",
+        "address",
+        "hq",
+        "ex",
+        "out",
+        "hillEx",
+        "hillOut",
+        "tAll",
+        "iAll",
+        "basic",
+        "hra",
+        "conAll",
+        "eduAll",
+        "speAll",
+        "medAll",
+        "mobileAll",
+        "dateOfBirth",
+        "dateOfJoining",
+        "parentId",
+        "pfNo",
+        "bankAccNo",
+        "ifscCode",
+        "esiNo",
+      ],
+      res
+    ) !== true
+  ) {
+    return;
+  }
+
+  // Validate email format
+  if (!validateEmail(email)) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Invalid email address."));
+  }
+
+  try {
+    // Check if the user exists
+    const user = await User.findById(_id);
+    if (!user) {
+      return res
+        .status(400)
+        .json(new ApiRes(400, null, "User with this ID does not exist."));
+    }
+
+    // Handle changes to the parentId and update references accordingly
+    if (parentId !== user.basicDetails?.parentId) {
+      const session = await User.startSession(); // Start a session for transaction
+      session.startTransaction();
+      try {
+        // Remove user from the old parent's downline
+        await User.findByIdAndUpdate(
+          user.basicDetails?.parentId,
+          { $pull: { downLineEmployees: user._id } },
+          { session }
+        );
+
+        // Add user to the new parent's downline, unless the parentRole is ADMIN
+        if (parentRole !== "ADMIN") {
+          await User.findByIdAndUpdate(
+            parentId,
+            { $addToSet: { downLineEmployees: user._id } },
+            { session }
+          );
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+      } catch (err) {
+        await session.abortTransaction();
+        session.endSession();
+        throw err;
+      }
+    }
+
+    // Build the updated employee data
+    const employeeData = {
+      empId,
+      name,
+      email,
+      password, // Ensure this is hashed elsewhere for security
+      role,
+      mobile,
+      headquarter,
+      basicDetails: {
+        pan,
+        aadhaar,
+        dateOfBirth,
+        dateOfJoining,
+        fatherName,
+        address,
+        parentId,
+        parentRole,
+        parentName,
+      },
+      distanceAllowanceDetails: {
+        hq,
+        ex,
+        out,
+        hillEx,
+        hillOut,
+        tAll,
+        iAll,
+      },
+      salaryDetails: {
+        basic,
+        hra,
+        conAll,
+        eduAll,
+        speAll,
+        medAll,
+        mobileAll,
+        pfNo,
+        bankAccNo,
+        ifscCode,
+        esiNo,
+      },
+    };
+
+    // Update the user data
+    const updatedUser = await User.findByIdAndUpdate(_id, employeeData, {
+      new: true,
+    });
+
+    Logger(`User ${empId} updated`, "info");
+    return res
+      .status(200)
+      .json(new ApiRes(200, updatedUser, `User ${empId} updated.`));
+  } catch (error) {
+    // Log and handle unexpected errors
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
+const view = asyncHandler(async (req, res) => {
+  const { _id } = req.params;
+
+  try {
+    // Check if the user exists
+    const user = await User.findById(_id);
+    if (!user) {
+      return res
+        .status(400)
+        .json(new ApiRes(400, null, "User with this ID does not exist."));
+    }
+
+    Logger(`User ${user.empId} viewed`, "info");
+    return res
+      .status(201)
+      .json(new ApiRes(201, user, `User ${user.empId} viewed.`));
+  } catch (error) {
+    // Log and handle unexpected errors
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
 const createAdmin = asyncHandler(async (req, res) => {
   const { name, email, password, role, mobile, headquarter, empId } = req.body;
 
@@ -417,4 +636,4 @@ const changePassword = asyncHandler(async (req, res) => {
   }
 });
 
-export { create, createAdmin, login, changePassword };
+export { create, createAdmin, login, changePassword, update, view };
