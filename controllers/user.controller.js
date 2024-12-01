@@ -741,13 +741,27 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
 // API's specific for Web App --->
 const getEmployeesDataForTable = asyncHandler(async (req, res) => {
   try {
-    const employees = await User.find({ role: { $ne: "ADMIN" } }).select(
-      "_id empId name parentName role password headquarter email isArchived"
+    let employees = await User.find({ role: { $ne: "ADMIN" } }).select(
+      "_id empId name basicDetails.parentName role password headquarter email isArchived -__t"
     );
 
     if (!employees.length) {
       return res.status(200).json(new ApiRes(200, [], `No employees found.`));
     }
+
+    employees = employees.map((employee) => {
+      return {
+        _id: employee._id,
+        empId: employee.empId,
+        name: employee.name,
+        parentName: employee._doc.basicDetails.parentName,
+        role: employee.role,
+        password: employee.password,
+        headquarter: employee.headquarter,
+        email: employee.email,
+        isArchived: employee.isArchived,
+      };
+    });
 
     return res
       .status(200)
