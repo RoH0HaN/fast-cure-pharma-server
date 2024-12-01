@@ -7,6 +7,7 @@ import {
   update,
   view,
   archive,
+  getEmployeesIdAndNameBasedOnRole,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -19,5 +20,11 @@ router.route("/create-admin").post(createAdmin);
 router.route("/login").post(login);
 router.route("/change-password").put(verifyJWT, changePassword);
 router.route("/archive/:_id").put(verifyJWT, archive);
+
+// API's specific for Web App --->
+router
+  .route("/get-employees-id-and-name-based-on-role/:role")
+  .get(verifyJWT, getEmployeesIdAndNameBasedOnRole);
+// API's specific for Web App --->
 
 export default router;

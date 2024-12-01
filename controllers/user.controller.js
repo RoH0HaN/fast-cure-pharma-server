@@ -670,4 +670,48 @@ const archive = asyncHandler(async (req, res) => {
   }
 });
 
-export { create, createAdmin, login, changePassword, update, view, archive };
+// API's specific for Web App --->
+const getEmployeesIdAndNameBasedOnRole = asyncHandler(async (req, res) => {
+  const employeeRole = req.params.role;
+
+  if (!validateFields(req.params, ["role"], res)) {
+    return;
+  }
+
+  try {
+    const employees = await User.find({ role: employeeRole }).select(
+      "_id name"
+    );
+
+    if (!employees.length) {
+      return res
+        .status(200)
+        .json(
+          new ApiRes(200, [], `No employees found of role ${employeeRole}.`)
+        );
+    }
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(200, employees, `All employees of role ${employeeRole}.`)
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+// API's specific for Web App --->
+
+export {
+  create,
+  createAdmin,
+  login,
+  changePassword,
+  update,
+  view,
+  archive,
+  getEmployeesIdAndNameBasedOnRole,
+};
