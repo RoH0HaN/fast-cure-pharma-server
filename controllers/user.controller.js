@@ -711,7 +711,9 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
     // Handle ADMIN and HR/OH roles
     if (role === "ADMIN" || role === "HR/OH") {
       // Fetch all employees
-      const allEmployees = await User.find({}).select("_id name");
+      const allEmployees = await User.find({ role: { $ne: "ADMIN" } }).select(
+        "_id name"
+      );
       allEmployees.forEach(addEmployee);
     } else {
       // For other roles, fetch the current user's record and their downlines
@@ -737,6 +739,27 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
 });
 
 // API's specific for Web App --->
+const getEmployeesDataForTable = asyncHandler(async (req, res) => {
+  try {
+    const employees = await User.find({ role: { $ne: "ADMIN" } }).select(
+      "_id empId name parentName role password headquarter email isArchived"
+    );
+
+    if (!employees.length) {
+      return res.status(200).json(new ApiRes(200, [], `No employees found.`));
+    }
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, employees, `All employees data.`));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
 const getEmployeesIdAndNameBasedOnRole = asyncHandler(async (req, res) => {
   const employeeRole = req.params.role;
 
@@ -781,4 +804,5 @@ export {
   archive,
   getEmployeesIdAndNameBasedOnRole,
   getDownlineEmployees,
+  getEmployeesDataForTable,
 };

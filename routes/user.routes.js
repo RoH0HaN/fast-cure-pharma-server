@@ -9,6 +9,7 @@ import {
   archive,
   getEmployeesIdAndNameBasedOnRole,
   getDownlineEmployees,
+  getEmployeesDataForTable,
 } from "../controllers/user.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -24,6 +25,9 @@ router.route("/archive/:_id").put(verifyJWT, archive);
 router.route("/get-downline-employees").get(verifyJWT, getDownlineEmployees);
 
 // API's specific for Web App --->
+router
+  .route("/get-employees-data-for-table")
+  .get(verifyJWT, getEmployeesDataForTable);
 router
   .route("/get-employees-id-and-name-based-on-role/:role")
   .get(verifyJWT, getEmployeesIdAndNameBasedOnRole);
