@@ -284,15 +284,7 @@ const getCategoryNames = asyncHandler(async (req, res) => {
 
     const names = categories.map((category) => category.name);
 
-    return res
-      .status(200)
-      .json(
-        new ApiRes(
-          200,
-          names,
-          names.length ? "Category names found." : "No Category names found."
-        )
-      );
+    return res.status(200).json(new ApiRes(200, names, ""));
   } catch (error) {
     Logger(error, "error");
     return res

@@ -4,6 +4,7 @@ import { User } from "../models/user.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 
+// Headquarter API's --->
 const createHeadquarter = asyncHandler(async (req, res) => {
   const { name } = req.body;
 
@@ -31,82 +32,6 @@ const createHeadquarter = asyncHandler(async (req, res) => {
       .status(200)
       .json(new ApiRes(200, null, `Headquarter ${name} created successfully.`));
   } catch (error) {
-    Logger(error, "error");
-    return res
-      .status(500)
-      .json(new ApiRes(500, null, error.message || "Internal server error."));
-  }
-});
-
-const createPlaces = asyncHandler(async (req, res) => {
-  const { places, headquarter } = req.body;
-
-  // Validate required fields
-  if (!validateFields(req.body, ["places", "headquarter"], res)) {
-    return;
-  }
-
-  try {
-    // Check if the headquarter exists
-    const headquarterExists = await Headquarter.findById(headquarter);
-    if (!headquarterExists) {
-      return res
-        .status(400)
-        .json(new ApiRes(400, null, "Headquarter does not exist."));
-    }
-
-    // Ensure `places` is an array
-    const placeArray = Array.isArray(places) ? places : JSON.parse(places);
-
-    // Filter out places that already exist in the database
-    const existingPlaces = await Place.find({
-      headquarter,
-      name: { $in: placeArray.map((place) => place.name) },
-    });
-
-    const existingPlaceNames = existingPlaces.map((place) => place.name);
-
-    // Identify new places to create
-    const newPlaces = placeArray.filter(
-      (place) => !existingPlaceNames.includes(place.name.toUpperCase())
-    );
-
-    // Bulk insert new places and update the headquarter in parallel
-    const insertedPlaces = await Place.insertMany(
-      newPlaces.map(({ name, type }) => ({
-        name,
-        type,
-        headquarter,
-      }))
-    );
-
-    const placeIds = insertedPlaces.map((place) => place._id);
-
-    // Update the headquarter with the new place IDs
-    await Headquarter.findByIdAndUpdate(headquarter, {
-      $addToSet: { places: { $each: placeIds } },
-    });
-
-    // Log the creation of each new place
-    insertedPlaces.forEach((place) =>
-      Logger(`Place ${place.name} created under headquarter ${headquarter}.`)
-    );
-
-    return res
-      .status(200)
-      .json(
-        new ApiRes(
-          200,
-          null,
-          `Places created successfully${
-            existingPlaceNames.length
-              ? `. Except: ${existingPlaceNames.join(", ")}, cause the are already existing`
-              : ""
-          }.`
-        )
-      );
-  } catch (error) {
-    // Log and handle unexpected errors
     Logger(error, "error");
     return res
       .status(500)
@@ -194,48 +119,6 @@ const getAllHeadquartersByRole = asyncHandler(async (req, res) => {
   }
 });
 
-const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
-  const _id = req.params._id; // Extract headquarter ID from request parameters
-
-  // Validate the required parameter `_id`
-  if (!_id) {
-    return res
-      .status(400)
-      .json(new ApiRes(400, null, "Headquarter ID is required."));
-  }
-
-  try {
-    // Fetch places associated with the given headquarter
-    const places = await Place.find({ headquarter: _id })
-      .select("name type headquarter")
-      .populate("headquarter", "name");
-
-    if (!places.length) {
-      // If no places found, return a 404 error
-      return res.status(200).json(new ApiRes(200, [], "Places not found."));
-    }
-
-    // Transform the result to replace `headquarter` with its `name`
-    const transformedPlaces = places.map((place) => ({
-      _id: place._id,
-      name: place.name,
-      type: place.type,
-      headquarter: place.headquarter.name, // Extract the name from the populated headquarter
-    }));
-
-    // Return the transformed places with a success message
-    return res
-      .status(200)
-      .json(new ApiRes(200, transformedPlaces, "Places fetched successfully."));
-  } catch (error) {
-    // Log the error and return a 500 internal server error
-    Logger(error, "error");
-    return res
-      .status(500)
-      .json(new ApiRes(500, null, error.message || "Internal server error."));
-  }
-});
-
 const deleteHeadquarter = asyncHandler(async (req, res) => {
   const _id = req.params._id; // Extract headquarter ID from request parameters
 
@@ -282,6 +165,99 @@ const deleteHeadquarter = asyncHandler(async (req, res) => {
       );
   } catch (error) {
     // Log the error and return a 500 internal server error
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getHeadquarterNames = asyncHandler(async (req, res) => {
+  try {
+    const headquarters = await Headquarter.find().select("name");
+
+    const names = headquarters.map((hq) => hq.name);
+
+    return res.status(200).json(new ApiRes(200, names, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+// Headquarter API's --->
+
+// Places API's --->
+const createPlaces = asyncHandler(async (req, res) => {
+  const { places, headquarter } = req.body;
+
+  // Validate required fields
+  if (!validateFields(req.body, ["places", "headquarter"], res)) {
+    return;
+  }
+
+  try {
+    // Check if the headquarter exists
+    const headquarterExists = await Headquarter.findById(headquarter);
+    if (!headquarterExists) {
+      return res
+        .status(400)
+        .json(new ApiRes(400, null, "Headquarter does not exist."));
+    }
+
+    // Ensure `places` is an array
+    const placeArray = Array.isArray(places) ? places : JSON.parse(places);
+
+    // Filter out places that already exist in the database
+    const existingPlaces = await Place.find({
+      headquarter,
+      name: { $in: placeArray.map((place) => place.name) },
+    });
+
+    const existingPlaceNames = existingPlaces.map((place) => place.name);
+
+    // Identify new places to create
+    const newPlaces = placeArray.filter(
+      (place) => !existingPlaceNames.includes(place.name.toUpperCase())
+    );
+
+    // Bulk insert new places and update the headquarter in parallel
+    const insertedPlaces = await Place.insertMany(
+      newPlaces.map(({ name, type }) => ({
+        name,
+        type,
+        headquarter,
+      }))
+    );
+
+    const placeIds = insertedPlaces.map((place) => place._id);
+
+    // Update the headquarter with the new place IDs
+    await Headquarter.findByIdAndUpdate(headquarter, {
+      $addToSet: { places: { $each: placeIds } },
+    });
+
+    // Log the creation of each new place
+    insertedPlaces.forEach((place) =>
+      Logger(`Place ${place.name} created under headquarter ${headquarter}.`)
+    );
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `Places created successfully${
+            existingPlaceNames.length
+              ? `. Except: ${existingPlaceNames.join(", ")}, cause the are already existing`
+              : ""
+          }.`
+        )
+      );
+  } catch (error) {
+    // Log and handle unexpected errors
     Logger(error, "error");
     return res
       .status(500)
@@ -378,6 +354,49 @@ const editPlace = asyncHandler(async (req, res) => {
   }
 });
 
+const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
+  const _id = req.params._id; // Extract headquarter ID from request parameters
+
+  // Validate the required parameter `_id`
+  if (!_id) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Headquarter ID is required."));
+  }
+
+  try {
+    // Fetch places associated with the given headquarter
+    const places = await Place.find({ headquarter: _id })
+      .select("name type headquarter")
+      .populate("headquarter", "name");
+
+    if (!places.length) {
+      // If no places found, return a 404 error
+      return res.status(200).json(new ApiRes(200, [], "Places not found."));
+    }
+
+    // Transform the result to replace `headquarter` with its `name`
+    const transformedPlaces = places.map((place) => ({
+      _id: place._id,
+      name: place.name,
+      type: place.type,
+      headquarter: place.headquarter.name, // Extract the name from the populated headquarter
+    }));
+
+    // Return the transformed places with a success message
+    return res
+      .status(200)
+      .json(new ApiRes(200, transformedPlaces, "Places fetched successfully."));
+  } catch (error) {
+    // Log the error and return a 500 internal server error
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+// Places API's --->
+
 export {
   createHeadquarter,
   createPlaces,
@@ -386,4 +405,5 @@ export {
   deleteHeadquarter,
   deletePlace,
   editPlace,
+  getHeadquarterNames,
 };

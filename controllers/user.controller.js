@@ -670,6 +670,72 @@ const archive = asyncHandler(async (req, res) => {
   }
 });
 
+const getDownlineEmployees = asyncHandler(async (req, res) => {
+  const { _id, role } = req.user;
+
+  // Validate the required fields
+  if (!validateFields(req.user, ["_id", "role"], res)) {
+    return;
+  }
+
+  try {
+    // Define a Set to track processed employees and avoid duplicates
+    const processedSet = new Set();
+    const downlines = [];
+
+    // Add employee to the downline list
+    const addEmployee = (employee) => {
+      if (!processedSet.has(employee._id.toString())) {
+        processedSet.add(employee._id.toString());
+        downlines.push({ _id: employee._id, name: employee.name });
+      }
+    };
+
+    // Recursive function to fetch all downlines
+    const fetchDownLineEmployees = async (downLineEmployees) => {
+      // Fetch all downline employees in a single query
+      const employees = await User.find({
+        _id: { $in: downLineEmployees },
+      }).select("_id name role downLineEmployees");
+
+      for (const employee of employees) {
+        addEmployee(employee);
+
+        // Continue fetching if the employee has a downline
+        if (employee.downLineEmployees?.length > 0) {
+          await fetchDownLineEmployees(employee.downLineEmployees);
+        }
+      }
+    };
+
+    // Handle ADMIN and HR/OH roles
+    if (role === "ADMIN" || role === "HR/OH") {
+      // Fetch all employees
+      const allEmployees = await User.find({}).select("_id name");
+      allEmployees.forEach(addEmployee);
+    } else {
+      // For other roles, fetch the current user's record and their downlines
+      const currentUser = await User.findById(_id).select(
+        "_id name role downLineEmployees"
+      );
+
+      addEmployee(currentUser);
+
+      // Fetch downline employees
+      await fetchDownLineEmployees(currentUser.downLineEmployees);
+    }
+
+    // Return the accumulated downlines
+    return res.status(200).json(new ApiRes(200, downlines, ""));
+  } catch (error) {
+    // Log and handle server errors
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
 // API's specific for Web App --->
 const getEmployeesIdAndNameBasedOnRole = asyncHandler(async (req, res) => {
   const employeeRole = req.params.role;
@@ -714,4 +780,5 @@ export {
   view,
   archive,
   getEmployeesIdAndNameBasedOnRole,
+  getDownlineEmployees,
 };

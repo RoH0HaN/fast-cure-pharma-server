@@ -20,6 +20,7 @@ app.use(cookieParser());
 import userRoutes from "../routes/user.routes.js";
 import headquarterRoutes from "../routes/headquarter.routes.js";
 import productRoutes from "../routes/product.routes.js";
+import miscRoutes from "../routes/misc.routes.js";
 
 // Routes
 const apiV1 = "/api/v1";
@@ -27,5 +28,6 @@ const apiV1 = "/api/v1";
 app.use(`${apiV1}/users`, userRoutes);
 app.use(`${apiV1}/headquarters`, headquarterRoutes);
 app.use(`${apiV1}/products`, productRoutes);
+app.use(`${apiV1}/miscs`, miscRoutes);
 
 export { app };
