@@ -270,7 +270,7 @@ const create = asyncHandler(async (req, res) => {
 
     employee.save();
     if (parentRole !== "ADMIN") {
-      await User.findByIdAndUpdate(
+      await Employee.findByIdAndUpdate(
         parentId,
         {
           $push: { downLineEmployees: employee._id },
