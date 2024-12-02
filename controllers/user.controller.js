@@ -448,6 +448,7 @@ const update = asyncHandler(async (req, res) => {
         hillOut,
         tAll,
         iAll,
+        mobileAll,
       },
       salaryDetails: {
         basic,
@@ -456,7 +457,6 @@ const update = asyncHandler(async (req, res) => {
         eduAll,
         speAll,
         medAll,
-        mobileAll,
         pfNo,
         bankAccNo,
         ifscCode,
@@ -465,14 +465,20 @@ const update = asyncHandler(async (req, res) => {
     };
 
     // Update the user data
-    const updatedUser = await User.findByIdAndUpdate(_id, employeeData, {
-      new: true,
-    });
+    await Employee.findByIdAndUpdate(
+      _id,
+      {
+        $set: employeeData,
+      },
+      {
+        new: true,
+      }
+    );
 
     Logger(`User ${empId} updated`, "info");
     return res
       .status(200)
-      .json(new ApiRes(200, updatedUser, `User ${empId} updated.`));
+      .json(new ApiRes(200, null, `User ${empId} updated.`));
   } catch (error) {
     // Log and handle unexpected errors
     Logger(error, "error");

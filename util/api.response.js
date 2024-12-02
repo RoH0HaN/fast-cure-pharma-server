@@ -9,7 +9,9 @@ class ApiRes {
 
 function validateFields(body, requiredFields, res) {
   const missingFields = requiredFields
-    .filter((field) => !body[field])
+    .filter((field) => {
+      return !Object.keys(body).includes(field);
+    })
     .map((field) => field);
 
   if (missingFields.length > 0) {
