@@ -110,7 +110,7 @@ const generateAccess = async (userID) => {
 
 const switchRole = async (userId, role) => {
   try {
-    const session = mongoose.startSession();
+    const session = await mongoose.startSession();
     session.startTransaction();
 
     const user = await User.findById(userId);
@@ -135,7 +135,7 @@ const switchRole = async (userId, role) => {
 
     await User.findByIdAndDelete(userId).session(session);
     const commonFields = user.toObject();
-    delete commonFields.__v;
+    delete commonFields.__t;
     commonFields.role = role;
 
     if (isManagerRole) {
