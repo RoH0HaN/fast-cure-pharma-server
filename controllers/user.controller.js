@@ -312,11 +312,14 @@ const create = asyncHandler(async (req, res) => {
     };
 
     switch (role) {
-      case "TBM" || "HR/OH":
+      case "TBM":
+      case "HR/OH":
         employee = new Employee(employeeData);
         break;
 
-      case "ABM" || "RBM" || "ZBM":
+      case "ABM":
+      case "ZBM":
+      case "ZBM":
         employee = new Manager(employeeData);
         break;
 
@@ -477,7 +480,7 @@ const update = asyncHandler(async (req, res) => {
     }
 
     if (role !== user.role && role !== "ADMIN") {
-      switchRole(user._id, role);
+      await switchRole(user._id, role);
     }
 
     // Build the updated employee data
@@ -510,7 +513,7 @@ const update = asyncHandler(async (req, res) => {
         iAll,
         mobileAll,
       },
-      salaryDetails: {
+      salaryStructure: {
         basic,
         hra,
         conAll,
@@ -525,7 +528,9 @@ const update = asyncHandler(async (req, res) => {
     };
 
     switch (role) {
-      case "ZBM" || "RBM" || "ABM":
+      case "ZBM":
+      case "RBM":
+      case "ABM":
         // Update the user data
         await Manager.findByIdAndUpdate(
           _id,
@@ -538,7 +543,8 @@ const update = asyncHandler(async (req, res) => {
         );
 
         break;
-      case "TBM" || "HR/OH":
+      case "TBM":
+      case "HR/OH":
         // Update the user data
         await Employee.findByIdAndUpdate(
           _id,
@@ -758,12 +764,9 @@ const archive = asyncHandler(async (req, res) => {
 });
 
 const getDownlineEmployees = asyncHandler(async (req, res) => {
-  const { _id, role } = req.user;
+  console.log(req.user);
 
-  // Validate the required fields
-  if (!validateFields(req.user, ["_id", "role"], res)) {
-    return;
-  }
+  const { _id, role } = req.user;
 
   try {
     // Define a Set to track processed employees and avoid duplicates
