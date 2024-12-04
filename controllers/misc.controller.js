@@ -83,7 +83,7 @@ const getMiscellaneous = asyncHandler(async (req, res) => {
 
   try {
     // Retrieve the employee's miscellaneous data
-    const existingMisc = await Misc.findOne({ _id });
+    const existingMisc = await Misc.findOne({ empId: _id });
 
     // If no miscellaneous data exists, return an empty response
     if (!existingMisc || !existingMisc.miscs) {
