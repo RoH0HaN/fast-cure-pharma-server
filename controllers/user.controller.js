@@ -764,8 +764,6 @@ const archive = asyncHandler(async (req, res) => {
 });
 
 const getDownlineEmployees = asyncHandler(async (req, res) => {
-  console.log(req.user);
-
   const { _id, role } = req.user;
 
   try {
