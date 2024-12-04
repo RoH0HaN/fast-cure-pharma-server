@@ -384,9 +384,7 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
     }));
 
     // Return the transformed places with a success message
-    return res
-      .status(200)
-      .json(new ApiRes(200, transformedPlaces, "Places fetched successfully."));
+    return res.status(200).json(new ApiRes(200, transformedPlaces, ""));
   } catch (error) {
     // Log the error and return a 500 internal server error
     Logger(error, "error");
