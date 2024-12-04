@@ -6,6 +6,7 @@ import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 import jwt from "jsonwebtoken";
 import dayjs from "dayjs";
+import mongoose from "mongoose";
 
 const initializeLeaveDocument = async (empId, dateOfJoining) => {
   const joiningDate = dayjs(dateOfJoining, "YYYY-MM-DD");
@@ -104,6 +105,61 @@ const generateAccess = async (userID) => {
     return { accessToken };
   } catch (error) {
     throw error;
+  }
+};
+
+const switchRole = async (userId, role) => {
+  try {
+    const session = mongoose.startSession();
+    session.startTransaction();
+
+    const user = await User.findById(userId);
+
+    const isManagerRole = ["ZBM", "RBM", "ABM"].includes(role);
+    const isEmployeeRole = ["HR/OH", "TBM"].includes(role);
+
+    const isCurrentlyEmployee = user instanceof Employee;
+    const isCurrentlyManager = user instanceof Manager;
+
+    if (
+      (isCurrentlyEmployee && isEmployeeRole) ||
+      (isCurrentlyManager && isManagerRole)
+    ) {
+      user.role = role;
+      await user.save({ session }, { new: true });
+      await session.commitTransaction();
+      session.endSession();
+
+      return user._id;
+    }
+
+    await User.findByIdAndDelete(userId).session(session);
+    const commonFields = user.toObject();
+    delete commonFields.__v;
+    commonFields.role = role;
+
+    if (isManagerRole) {
+      const newManager = new Manager({
+        ...commonFields,
+        downLineEmployees: [],
+      });
+
+      await newManager.save({ session }, { new: true });
+      await session.commitTransaction();
+      session.endSession();
+      return newManager._id;
+    } else if (isEmployeeRole) {
+      const newEmployee = new Employee({
+        ...commonFields,
+      });
+      await newEmployee.save({ session }, { new: true });
+      await session.commitTransaction();
+      session.endSession();
+      return newEmployee._id;
+    }
+  } catch (error) {
+    Logger(error, "error");
+    throw new Error(error.message || "Internal Server Error.");
   }
 };
 
@@ -420,6 +476,10 @@ const update = asyncHandler(async (req, res) => {
       }
     }
 
+    if (role !== user.role && role !== "ADMIN") {
+      switchRole(user._id, role);
+    }
+
     // Build the updated employee data
     const employeeData = {
       empId,
@@ -464,16 +524,37 @@ const update = asyncHandler(async (req, res) => {
       },
     };
 
-    // Update the user data
-    await Employee.findByIdAndUpdate(
-      _id,
-      {
-        $set: employeeData,
-      },
-      {
-        new: true,
-      }
-    );
+    switch (role) {
+      case "ZBM" || "RBM" || "ABM":
+        // Update the user data
+        await Manager.findByIdAndUpdate(
+          _id,
+          {
+            $set: employeeData,
+          },
+          {
+            new: true,
+          }
+        );
+
+        break;
+      case "TBM" || "HR/OH":
+        // Update the user data
+        await Employee.findByIdAndUpdate(
+          _id,
+          {
+            $set: employeeData,
+          },
+          {
+            new: true,
+          }
+        );
+
+        break;
+
+      default:
+        break;
+    }
 
     Logger(`User ${empId} updated`, "info");
     return res
