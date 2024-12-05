@@ -139,15 +139,7 @@ const getProductNames = asyncHandler(async (req, res) => {
 
     const names = products.map((product) => product.name);
 
-    return res
-      .status(200)
-      .json(
-        new ApiRes(
-          200,
-          names,
-          names.length ? "Product names found." : "No product names found."
-        )
-      );
+    return res.status(200).json(new ApiRes(200, names, ""));
   } catch (error) {
     Logger(error, "error");
     return res

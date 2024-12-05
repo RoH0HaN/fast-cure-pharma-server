@@ -20,6 +20,6 @@ router.route("/approve/:_id").put(verifyJWT, approve);
 router.route("/reject/:_id").put(verifyJWT, reject);
 router.route("/archive/:_id").put(verifyJWT, archive);
 router.route("/get-pending-dvls").get(verifyJWT, getPendingDVLs);
-router.route("/get-approved-dvls").get(verifyJWT, getApprovedDVLs);
+router.route("/get-approved-dvls/:_id").get(verifyJWT, getApprovedDVLs);
 
 export default router;

@@ -2,6 +2,7 @@ import { ApiRes, validateFields } from "../util/api.response.js";
 import { DVL } from "../models/dvl.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
+import { User } from "../models/user.models.js";
 
 const getReasonForPending = async (dvl) => {
   const { isNeedToDelete, isNeedToUpdate, dataToBeUpdated } = dvl;
@@ -32,7 +33,6 @@ const create = asyncHandler(async (req, res) => {
     prodTwo,
     prodThree,
     prodFour,
-    remarks,
     freqVisit,
   } = req.body;
 
@@ -71,7 +71,6 @@ const create = asyncHandler(async (req, res) => {
       prodTwo: prodTwo?.trim(),
       prodThree: prodThree?.trim(),
       prodFour: prodFour?.trim(),
-      remarks: remarks?.trim(),
       freqVisit,
       addedBy,
     });
@@ -469,34 +468,86 @@ const archive = asyncHandler(async (req, res) => {
 });
 
 const getPendingDVLs = asyncHandler(async (req, res) => {
+  const { role, _id } = req.user;
   try {
-    let pendingDVLs = await DVL.find({ status: "PENDING" }).select(
-      "-__v -locations -remarks -isArchived"
-    );
+    const dvls = [];
+    const dvlSet = new Set();
 
-    pendingDVLs = pendingDVLs.map(async (dvl) => {
-      return {
-        _id: dvl._id,
-        docName: dvl.docName,
-        qualification: dvl.qualification,
-        area: dvl.area,
-        prodOne: dvl.prodOne,
-        prodTwo: dvl.prodTwo,
-        prodThree: dvl.prodThree,
-        prodFour: dvl.prodFour,
-        freqVisit: dvl.freqVisit,
-        addedBy: dvl.addedBy,
-        reason: await getReasonForPending(dvl),
-        dataToBeUpdated: dvl.dataToBeUpdated,
-        isNeedToUpdate: dvl.isNeedToUpdate,
-        isNeedToDelete: dvl.isNeedToDelete,
+    const addUniqueDvl = (dvlList) => {
+      dvlList.forEach((dvl) => {
+        if (!dvlSet.has(dvl._id.toString())) {
+          dvls.push({
+            _id: dvl._id,
+            empId: dvl.addedBy.empId,
+            docName: dvl.docName,
+            qualification: dvl.qualification,
+            area: dvl.area,
+            prodOne: dvl.prodOne,
+            prodTwo: dvl.prodTwo,
+            prodThree: dvl.prodThree,
+            prodFour: dvl.prodFour,
+            freqVisit: dvl.freqVisit,
+            addedBy: `${dvl.addedBy.name} [${dvl.addedBy.role}]`,
+            reason: dvl.isNeedToDelete
+              ? "DELETION REQUEST"
+              : dvl.isNeedToUpdate
+                ? "UPDATE REQUEST"
+                : "APPROVAL REQUEST",
+            dataToBeUpdated: dvl.dataToBeUpdated,
+            isNeedToUpdate: dvl.isNeedToUpdate,
+            isNeedToDelete: dvl.isNeedToDelete,
+          });
+          dvlSet.add(dvl._id.toString());
+        }
+      });
+    };
+
+    if (role === "ADMIN") {
+      // Admin fetching all pending DVLs
+      const pendingDvls = await DVL.find({ status: "PENDING" })
+        .select("-__v -locations -remarks -isArchived")
+        .populate("addedBy", "name role empId");
+      addUniqueDvl(pendingDvls);
+    } else {
+      const user = await User.findById(_id).select("downlineEmployees _id");
+
+      const pendingDvls = await DVL.find({
+        status: "PENDING",
+        addedBy: user._id,
+      })
+        .select("-__v -locations -remarks -isArchived")
+        .populate("addedBy", "name role empId");
+
+      addUniqueDvl(pendingDvls);
+
+      const fetchDownlinePendingDvls = async (employeeIds) => {
+        const employees = await User.find({
+          _id: { $in: employeeIds },
+        }).select("downlineEmployees _id");
+
+        for (const employee of employees) {
+          const employeePendingDvls = await DVL.find({
+            status: "PENDING",
+            addedBy: employee._id,
+          })
+            .select("-__v -locations -remarks -isArchived")
+            .populate("addedBy", "name role empId");
+
+          addUniqueDvl(employeePendingDvls);
+
+          if (employee.downlineEmployees?.length > 0) {
+            await fetchDownlinePendingDvls(employee.downlineEmployees);
+          }
+        }
       };
-    });
+
+      if (user.downlineEmployees?.length > 0) {
+        await fetchDownlinePendingDvls(user.downlineEmployees);
+      }
+    }
 
     // Send success response
-    return res
-      .status(201)
-      .json(new ApiRes(201, await Promise.all(pendingDVLs), ""));
+    return res.status(201).json(new ApiRes(201, dvls, ""));
   } catch (error) {
     Logger(error, "error");
     return res
@@ -506,13 +557,82 @@ const getPendingDVLs = asyncHandler(async (req, res) => {
 });
 
 const getApprovedDVLs = asyncHandler(async (req, res) => {
+  const _id = req.user._id;
   try {
-    let approvedDVLs = await DVL.find({ status: "APPROVED" }).select(
-      "-__v -locations -remarks -isArchived -dataToBeUpdated -isNeedToUpdate -isNeedToDelete"
-    );
+    const dvls = [];
+    const dvlSet = new Set();
+
+    const addUniqueDvl = (dvlList) => {
+      dvlList.forEach((dvl) => {
+        if (!dvlSet.has(dvl._id.toString())) {
+          dvls.push({
+            _id: dvl._id,
+            empId: dvl.addedBy.empId,
+            docName: dvl.docName,
+            qualification: dvl.qualification,
+            area: dvl.area,
+            prodOne: dvl.prodOne,
+            prodTwo: dvl.prodTwo,
+            prodThree: dvl.prodThree,
+            prodFour: dvl.prodFour,
+            freqVisit: dvl.freqVisit,
+            addedBy: `${dvl.addedBy.name} [${dvl.addedBy.role}]`,
+            approvedBy: `${dvl.approvedBy.name} [${dvl.approvedBy.role}]`,
+            dataToBeUpdated: dvl.dataToBeUpdated,
+            isNeedToUpdate: dvl.isNeedToUpdate,
+            isNeedToDelete: dvl.isNeedToDelete,
+          });
+          dvlSet.add(dvl._id.toString());
+        }
+      });
+    };
+
+    const fetchDownlineApprovedDvls = async (employeeIds) => {
+      const employees = await User.find({
+        _id: { $in: employeeIds },
+      }).select("downlineEmployees _id");
+
+      for (const employee of employees) {
+        const employeeApprovedDvls = await DVL.find({
+          status: "APPROVED",
+          isArchived: false,
+          addedBy: employee._id,
+        })
+          .select("-__v -locations -remarks -isArchived")
+          .populate([
+            { path: "addedBy", select: "name role empId" },
+            { path: "approvedBy", select: "name role" },
+          ]);
+
+        addUniqueDvl(employeeApprovedDvls);
+
+        if (employee.downlineEmployees?.length > 0) {
+          await fetchDownlineApprovedDvls(employee.downlineEmployees);
+        }
+      }
+    };
+
+    const user = await User.findById(_id).select("downlineEmployees _id");
+
+    const approvedDvls = await DVL.find({
+      status: "APPROVED",
+      isArchived: false,
+      addedBy: user._id,
+    })
+      .select("-__v -locations -remarks -isArchived")
+      .populate([
+        { path: "addedBy", select: "name role empId" },
+        { path: "approvedBy", select: "name role" },
+      ]);
+
+    addUniqueDvl(approvedDvls);
+
+    if (user.downlineEmployees?.length > 0) {
+      await fetchDownlineApprovedDvls(user.downlineEmployees);
+    }
 
     // Send success response
-    return res.status(201).json(new ApiRes(201, approvedDVLs, ""));
+    return res.status(201).json(new ApiRes(201, dvls, ""));
   } catch (error) {
     Logger(error, "error");
     return res
