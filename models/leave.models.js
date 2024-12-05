@@ -2,7 +2,7 @@ import { model, Schema } from "mongoose";
 
 // Hybrid Schema
 const hybridSchema = new Schema({
-  title: { type: String, default: "" },
+  title: { type: String, default: "", uppercase: true },
   cl: { type: Number, default: 0 },
   pl: { type: Number, default: 0 },
   lwp: { type: Number, default: 0 },
@@ -10,9 +10,9 @@ const hybridSchema = new Schema({
 
 // Leave Request Sub document Schema
 const leaveRequestSchema = new Schema({
-  leaveType: { type: String, required: true }, // e.g., "PL", "CL", "LWP"
-  status: { type: String, required: true }, // e.g., "Pending", "Approved", "Rejected"
-  reason: { type: String, required: true },
+  leaveType: { type: String, required: true, uppercase: true }, // e.g., "PL", "CL", "LWP"
+  status: { type: String, required: true, uppercase: true }, // e.g., "Pending", "Approved", "Rejected"
+  reason: { type: String, required: true, uppercase: true },
   fromDate: { type: Date, required: true },
   toDate: { type: Date, required: true },
   duration: { type: Number, required: true },
@@ -20,7 +20,7 @@ const leaveRequestSchema = new Schema({
   hybrid: { type: hybridSchema, default: () => ({}) },
   approvedBy: { type: Schema.Types.ObjectId, ref: "User", required: false },
   lwpInLeave: { type: Number, default: 0 },
-  remarks: { type: String, default: "" },
+  remarks: { type: String, default: "", uppercase: true },
 });
 
 // Main Leave Schema

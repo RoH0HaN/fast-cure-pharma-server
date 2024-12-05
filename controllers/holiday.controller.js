@@ -105,9 +105,7 @@ const updateHoliday = asyncHandler(async (req, res) => {
     // Respond with a success message
     return res
       .status(200)
-      .json(
-        new ApiRes(200, null, `Holiday "${updatedHoliday.title}" updated.`)
-      );
+      .json(new ApiRes(200, null, `Holiday ${updatedHoliday.title} updated.`));
   } catch (error) {
     // Log and handle unexpected errors
     Logger(error, "error");
@@ -219,38 +217,10 @@ const getHolidaysByYear = asyncHandler(async (req, res) => {
   }
 });
 
-// API's specific for Web App --->
-const getHolidaysById = asyncHandler(async (req, res) => {
-  const _id = req.params._id;
-
-  if (!id) {
-    return res
-      .status(400)
-      .json(new ApiRes(400, null, "Holiday ID is required."));
-  }
-
-  try {
-    const holiday = await Holiday.findById(_id).select("_id title date");
-
-    if (!holiday) {
-      return res.status(404).json(new ApiRes(404, null, "Holiday not found."));
-    }
-
-    return res.status(200).json(new ApiRes(200, holiday, ""));
-  } catch (error) {
-    Logger(error, "error");
-    return res
-      .status(500)
-      .json(new ApiRes(500, null, error.message || "Internal server error."));
-  }
-});
-// API's specific for Web App --->
-
 export {
   createHoliday,
   updateHoliday,
   deleteHoliday,
   getHolidays,
   getHolidaysByYear,
-  getHolidaysById,
 };

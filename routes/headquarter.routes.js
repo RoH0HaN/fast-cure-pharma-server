@@ -8,6 +8,7 @@ import {
   deletePlace,
   editPlace,
   getHeadquarterNames,
+  getUsersHeadquarterAndPlaces,
 } from "../controllers/headquarter.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -26,5 +27,9 @@ router.route("/get-headquarter-names").get(verifyJWT, getHeadquarterNames);
 router
   .route("/get-headquarters-by-role")
   .get(verifyJWT, getAllHeadquartersByRole);
+
+router
+  .route("/get-users-headquarter-and-places")
+  .get(verifyJWT, getUsersHeadquarterAndPlaces);
 
 export default router;

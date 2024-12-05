@@ -851,9 +851,7 @@ const getEmployeesDataForTable = asyncHandler(async (req, res) => {
       };
     });
 
-    return res
-      .status(200)
-      .json(new ApiRes(200, employees, `All employees data.`));
+    return res.status(200).json(new ApiRes(200, employees, ""));
   } catch (error) {
     Logger(error, "error");
     return res

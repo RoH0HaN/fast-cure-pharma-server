@@ -395,6 +395,40 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
 });
 // Places API's --->
 
+// API for Headquarter and Places --->
+const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
+  const headquarterName = req.user.headquarter;
+
+  try {
+    const headquarter = await Headquarter.findOne({ name: headquarterName });
+
+    if (!headquarter) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, "Headquarter not found."));
+    }
+
+    const places = await Place.find({ headquarter: headquarter._id }).select(
+      "name"
+    );
+
+    const response = [];
+    places.forEach((place) => {
+      response.push(place.name);
+    });
+
+    response.push(headquarter.name);
+
+    return res.status(200).json(new ApiRes(200, response, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+// API for Headquarter and Places --->
+
 export {
   createHeadquarter,
   createPlaces,
@@ -404,4 +438,5 @@ export {
   deletePlace,
   editPlace,
   getHeadquarterNames,
+  getUsersHeadquarterAndPlaces,
 };

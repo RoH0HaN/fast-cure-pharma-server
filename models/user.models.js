@@ -10,6 +10,8 @@ const userSchema = new Schema(
     name: {
       type: String,
       required: true,
+      uppercase: true,
+      trim: true,
     },
     email: {
       type: String,
@@ -32,6 +34,7 @@ const userSchema = new Schema(
     headquarter: {
       type: String,
       required: true,
+      uppercase: true,
     },
   },
   { timestamps: true }
@@ -63,6 +66,7 @@ const commonDetails = {
       type: String,
       trim: true,
       default: "",
+      uppercase: true,
     },
     dateOfBirth: {
       type: String,
@@ -92,11 +96,13 @@ const commonDetails = {
     parentRole: {
       type: String,
       default: "",
+      uppercase: true,
     },
     parentName: {
       type: String,
       trim: true,
       default: "",
+      uppercase: true,
     },
   },
   distanceAllowanceDetails: {

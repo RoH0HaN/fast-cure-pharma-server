@@ -7,7 +7,7 @@ import isBetween from "dayjs/plugin/isBetween.js";
 dayjs.extend(isBetween);
 
 const create = asyncHandler(async (req, res) => {
-  const miscs = req.body; // Extract miscellaneous items from the request body
+  let miscs = req.body; // Extract miscellaneous items from the request body
   const empId = req.user._id; // Extract employee ID from the authenticated user
   const empName = req.user.name; // Extract employee name from the authenticated user
 
@@ -19,6 +19,12 @@ const create = asyncHandler(async (req, res) => {
   }
 
   try {
+    miscs = miscs.map((misc) => {
+      return {
+        particular: misc.particular.toUpperCase(),
+        amount: misc.amount,
+      };
+    });
     // Use a consistent date format for the current day
     const date = dayjs().format("YYYY-MM-DD");
 
