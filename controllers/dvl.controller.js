@@ -284,8 +284,9 @@ const approve = asyncHandler(async (req, res) => {
             ...dataToBeUpdated,
             dataToBeUpdated: {},
             isNeedToUpdate: false,
-            addedBy: req.user?._id,
+            addedBy: dvl.addedBy,
             status: "APPROVED",
+            approvedBy: req.user?._id,
           },
         },
         { new: true }
@@ -344,7 +345,7 @@ const reject = asyncHandler(async (req, res) => {
       // Send success response
       return res
         .status(200)
-        .json(new ApiRes(200, null, `DVL ${docName} rejected.`));
+        .json(new ApiRes(200, null, `DVL ${docName} deleted.`));
     }
     // to reject a delete DVL request
     else if (
@@ -557,7 +558,7 @@ const getPendingDVLs = asyncHandler(async (req, res) => {
 });
 
 const getApprovedDVLs = asyncHandler(async (req, res) => {
-  const _id = req.user._id;
+  const _id = req.params._id;
   try {
     const dvls = [];
     const dvlSet = new Set();
@@ -578,6 +579,7 @@ const getApprovedDVLs = asyncHandler(async (req, res) => {
             freqVisit: dvl.freqVisit,
             addedBy: `${dvl.addedBy.name} [${dvl.addedBy.role}]`,
             approvedBy: `${dvl.approvedBy.name} [${dvl.approvedBy.role}]`,
+            locations: dvl.locations,
             dataToBeUpdated: dvl.dataToBeUpdated,
             isNeedToUpdate: dvl.isNeedToUpdate,
             isNeedToDelete: dvl.isNeedToDelete,
