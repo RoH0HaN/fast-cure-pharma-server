@@ -416,7 +416,7 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
     const allPlacesAndHeadquarter = [];
     const allPlacesAndHeadquarterSet = new Set();
 
-    addUniqueData = (places) => {
+    const addUniqueData = (places) => {
       places.forEach((place) => {
         if (!allPlacesAndHeadquarterSet.has(place.name)) {
           allPlacesAndHeadquarterSet.add(place.name);
@@ -425,7 +425,7 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
       });
     };
 
-    fetchDownlinePlacesAndHeadquarter = async (employeeIds) => {
+    const fetchDownlinePlacesAndHeadquarter = async (employeeIds) => {
       const employees = await User.find({ _id: { $in: employeeIds } }).select(
         "headquarter downLineEmployees"
       );
@@ -436,7 +436,8 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
         const places = await Place.find({
           headquarter: headquarter._id,
         }).select("name");
-        addUniqueData(Array.from(headquarter.name));
+
+        addUniqueData([headquarter]);
         addUniqueData(places);
 
         if (employee.downLineEmployees?.length > 0) {
@@ -445,7 +446,7 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
       }
     };
 
-    addUniqueData(Array.from(headquarter.name));
+    addUniqueData([headquarter]);
     addUniqueData(places);
 
     if (user.downLineEmployees?.length > 0) {

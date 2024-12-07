@@ -1,10 +1,21 @@
 import { Router } from "express";
-import { create, update } from "../controllers/tourPlan.controller.js";
+import {
+  create,
+  update,
+  allowExtraDay,
+  approveTourPlanDates,
+  getTourPlan,
+} from "../controllers/tourPlan.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
 const router = Router();
 
 router.route("/create").post(verifyJWT, create);
 router.route("/update").post(verifyJWT, update);
+router.route("/allow-extra-day/:_id").put(verifyJWT, allowExtraDay);
+router
+  .route("/approve-tour-plan-dates/:_id")
+  .put(verifyJWT, approveTourPlanDates);
+router.route("/get-tour-plan").get(verifyJWT, getTourPlan);
 
 export default router;
