@@ -30,6 +30,6 @@ router
 
 router
   .route("/get-users-headquarter-and-places")
-  .get(verifyJWT, getUsersHeadquarterAndPlaces);
+  .get(verifyJWT, getUsersHeadquarterAndPlaces); //Downline Included
 
 export default router;

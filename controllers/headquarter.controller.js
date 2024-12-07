@@ -397,10 +397,25 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
 
 // API for Headquarter and Places --->
 const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
-  const headquarterName = req.user.headquarter;
+  const _id = req.user._id;
 
   try {
-    const headquarter = await Headquarter.findOne({ name: headquarterName });
+    // Fetch user and associated headquarter
+    const user = await User.findById(_id)
+      .select("headquarter downLineEmployees")
+      .lean();
+
+    if (!user?.headquarter) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, "User headquarter not found."));
+    }
+
+    // Fetch user's headquarter and associated places in parallel
+    const [headquarter, places] = await Promise.all([
+      Headquarter.findOne({ name: user.headquarter }).lean(),
+      Place.find({ headquarter: user.headquarter }).select("name").lean(),
+    ]);
 
     if (!headquarter) {
       return res
@@ -408,18 +423,57 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
         .json(new ApiRes(404, null, "Headquarter not found."));
     }
 
-    const places = await Place.find({ headquarter: headquarter._id }).select(
-      "name"
-    );
+    // Initialize unique data storage
+    const allPlacesAndHeadquarterSet = new Set();
+    allPlacesAndHeadquarterSet.add(headquarter.name);
+    places.forEach((place) => allPlacesAndHeadquarterSet.add(place.name));
 
-    const response = [];
-    places.forEach((place) => {
-      response.push(place.name);
-    });
+    // Recursive function to process downline employees
+    const fetchDownlinePlacesAndHeadquarter = async (employeeIds) => {
+      if (!employeeIds || employeeIds.length === 0) return;
 
-    response.push(headquarter.name);
+      const employees = await User.find({ _id: { $in: employeeIds } })
+        .select("headquarter downLineEmployees")
+        .lean();
 
-    return res.status(200).json(new ApiRes(200, response, ""));
+      const downlineHeadquarters = new Set();
+
+      employees.forEach((employee) => {
+        if (employee.headquarter) {
+          downlineHeadquarters.add(employee.headquarter);
+        }
+        if (employee.downLineEmployees?.length > 0) {
+          downlineHeadquarters.add(...employee.downLineEmployees);
+        }
+      });
+
+      // Fetch all unique headquarters and places for downline employees
+      const [downlineHeadquarterDocs, downlinePlaceDocs] = await Promise.all([
+        Headquarter.find({
+          name: { $in: Array.from(downlineHeadquarters) },
+        }).lean(),
+        Place.find({
+          headquarter: { $in: Array.from(downlineHeadquarters) },
+        })
+          .select("name")
+          .lean(),
+      ]);
+
+      downlineHeadquarterDocs.forEach((hq) =>
+        allPlacesAndHeadquarterSet.add(hq.name)
+      );
+      downlinePlaceDocs.forEach((place) =>
+        allPlacesAndHeadquarterSet.add(place.name)
+      );
+    };
+
+    // Process downline employees recursively
+    await fetchDownlinePlacesAndHeadquarter(user.downLineEmployees);
+
+    // Convert the set to an array for the response
+    const allPlacesAndHeadquarter = Array.from(allPlacesAndHeadquarterSet);
+
+    return res.status(200).json(new ApiRes(200, allPlacesAndHeadquarter, ""));
   } catch (error) {
     Logger(error, "error");
     return res
@@ -427,6 +481,7 @@ const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
       .json(new ApiRes(500, null, error.message || "Internal server error."));
   }
 });
+
 // API for Headquarter and Places --->
 
 export {

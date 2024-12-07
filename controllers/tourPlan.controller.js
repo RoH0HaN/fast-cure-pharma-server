@@ -1,6 +1,7 @@
 import { ApiRes, validateFields } from "../util/api.response.js";
 import { TourPlan } from "../models/tourPlan.models.js";
 import { User } from "../models/user.models.js";
+import { Headquarter, Place } from "../models/headquarter.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 import dayjs from "dayjs";
@@ -79,12 +80,12 @@ const create = asyncHandler(async (req, res) => {
 
       if (!createAllowed && !existingTourPlan.isExtraDayForCreate) {
         return res
-          .status(203) // used in android app for warning
+          .status(300) // used in android app for warning
           .json(
             new ApiRes(
-              203,
+              300,
               null,
-              `${name}, You can create tour plans only during the allowed window. Please contact ADMIN for more information.`
+              `${name}, You can create tour plans only between 20th and 25th of every month. Please contact ADMIN for more information.`
             )
           );
       }
@@ -114,9 +115,9 @@ const create = asyncHandler(async (req, res) => {
 
     if (!tourPlans[year]) tourPlans[year] = {};
     if (tourPlans[year][month]) {
-      return res.status(203).json(
+      return res.status(300).json(
         new ApiRes(
-          203, // used in android app for warning
+          300, // used in android app for warning
           null,
           `${name}, Your tour plan already exists for month ${month}.`
         )
@@ -148,4 +149,159 @@ const create = asyncHandler(async (req, res) => {
   }
 });
 
-export { create };
+const update = asyncHandler(async (req, res) => {
+  const { name, role, _id } = req.user;
+  const tourPlan = req.body;
+  if (!Array.isArray(tourPlan) || tourPlan.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Tour plan entries are required."));
+  }
+  try {
+    const { year, month } = getCurrentYearAndNextMonth();
+    const todayDate = dayjs().date();
+
+    let existingTourPlan = await TourPlan.findOne({ empId: _id }).lean(); //Lean for performance cause no extra mongoose methods won't come along
+
+    // Ensure the tour plan exists or create a new one
+    if (!existingTourPlan) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, `${name}, No tour plan found.`));
+    }
+    // Role-based restrictions for creating tour plans
+    const createAllowed =
+      (role === "TBM" && todayDate >= 20 && todayDate <= 25) ||
+      (role !== "TBM" && todayDate >= 20 && todayDate <= 27);
+
+    if (!createAllowed && !existingTourPlan.isExtraDayForCreate) {
+      return res
+        .status(300) // used in android app for warning
+        .json(
+          new ApiRes(
+            300,
+            null,
+            `${name}, You can create tour plans only between 20th and 25th of every month. Please contact ADMIN for more information.`
+          )
+        );
+    }
+
+    const tourPlans = existingTourPlan.tourPlan || {};
+
+    if (!tourPlans[year] || !tourPlans[year][month]) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, No tour plan found for month ${month}.`
+          )
+        );
+    }
+    // Update tour plans
+    const existingTourPlanList = tourPlans[year][month];
+    const updatedTourPlanList = tourPlan.map((item, index) => {
+      const currentPlan = existingTourPlanList[index] || {};
+
+      return {
+        date: item.date,
+        day: item.day,
+        place: item.place,
+        isApproved:
+          currentPlan.place === item.place ? currentPlan.isApproved : false,
+      };
+    });
+
+    // Save updated tour plans
+    tourPlans[year][month] = updatedTourPlanList;
+
+    await TourPlan.updateOne(
+      { empId: _id },
+      {
+        $set: {
+          [`tourPlan.${year}.${month}`]: updatedTourPlanList,
+          isExtraDayForCreate: false,
+        },
+      }
+    );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getTourPlan = asyncHandler(async (req, res) => {
+  const { _id, year, month } = req.query;
+
+  if (!validateFields(req.query, ["_id", "year", "month"], res)) {
+    return;
+  }
+
+  try {
+    const employee = await User.findById(_id).select("headquarter role");
+
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found."));
+    }
+
+    if (employee.role !== "TBM") {
+      const employeeHeadquarter = await Headquarter.findOne({
+        name: employee.headquarter,
+      })
+        .select("places")
+        .populate("places");
+
+      placesUnderHeadquarter = employeeHeadquarter.places;
+      placesUnderHeadquarter.push({ name: employee.headquarter, type: "HQ" });
+    }
+
+    const tourPlan = await TourPlan.findOne({
+      empId: _id,
+    });
+
+    if (!tourPlan) {
+      return res.status(201).json(new ApiRes(201, [], "Tour plan not found."));
+    }
+
+    if (tourPlan.tourPlan.size === 0) {
+      return res
+        .status(201)
+        .json(new ApiRes(201, [], "Tour plan not found for this month."));
+    }
+
+    const yearData = tourPlan.tourPlan.get(year);
+    const monthData = yearData.get(month);
+
+    if (!monthData) {
+      return res
+        .status(201)
+        .json(new ApiRes(201, [], "Tour plan not found for this month."));
+    }
+
+    const tourPlanDates = monthData.map((item) => item.date);
+
+    //TODO: need to check area and changed area from the dcr report to show in tour plan
+
+    return res.status(201).json(new ApiRes(201, monthData, "Tour plan found."));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const approveTourPlanDates = asyncHandler(async (req, res) => {
+  const selectedPlans = req.body;
+
+  if (!Array.isArray(selectedPlans) || selectedPlans.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Tour plan entries are required."));
+  }
+});
+
+export { create, update, getTourPlan };
