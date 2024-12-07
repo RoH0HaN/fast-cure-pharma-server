@@ -279,7 +279,7 @@ const getTourPlan = asyncHandler(async (req, res) => {
     }
 
     const yearData = tourPlan.tourPlan.get(year);
-    const monthData = yearData.get(month);
+    const monthData = yearData[month];
 
     if (!monthData) {
       return res
