@@ -254,7 +254,7 @@ const getTourPlan = asyncHandler(async (req, res) => {
         .select("places")
         .populate("places");
 
-      placesUnderHeadquarter = employeeHeadquarter.places;
+      const placesUnderHeadquarter = employeeHeadquarter.places;
       placesUnderHeadquarter.push({ name: employee.headquarter, type: "HQ" });
     }
 
@@ -301,6 +301,51 @@ const getTourPlan = asyncHandler(async (req, res) => {
     return res
       .status(201)
       .json(new ApiRes(201, modifiedTourPlan, "Tour plan found."));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getTourPlanForEdit = asyncHandler(async (req, res) => {
+  const { _id, name } = req.user;
+
+  try {
+    const { year, month } = getCurrentYearAndNextMonth();
+
+    const tourPlan = await TourPlan.findOne({
+      empId: _id,
+    });
+
+    if (!tourPlan) {
+      return res.status(404).json(new ApiRes(404, null, ""));
+    }
+
+    let tourPlans = Object.fromEntries(tourPlan.tourPlan);
+
+    if (!tourPlans[year] || !tourPlans[year][month]) {
+      return res
+        .status(200)
+        .json(
+          new ApiRes(
+            200,
+            null,
+            `${name}, no existing tour plan found to edit, create one first.`
+          )
+        );
+    }
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          201,
+          tourPlans,
+          `${name}, an existing tour plan found for month ${month} & year ${year} you can't add a new one until next month's 20th.`
+        )
+      );
   } catch (error) {
     Logger(error, "error");
     return res
@@ -452,4 +497,11 @@ const allowExtraDay = asyncHandler(async (req, res) => {
   }
 });
 
-export { create, update, getTourPlan, approveTourPlanDates, allowExtraDay };
+export {
+  create,
+  update,
+  getTourPlan,
+  approveTourPlanDates,
+  allowExtraDay,
+  getTourPlanForEdit,
+};

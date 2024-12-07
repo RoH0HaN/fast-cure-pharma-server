@@ -2,7 +2,7 @@ import { model, Schema } from "mongoose";
 
 const headquarterSchema = new Schema(
   {
-    name: { type: String, required: true, uppercase: true },
+    name: { type: String, required: true, uppercase: true, trim: true },
     places: {
       type: [{ type: Schema.Types.ObjectId, ref: "Place" }],
       default: [],
@@ -13,7 +13,7 @@ const headquarterSchema = new Schema(
 );
 
 const placeSchema = new Schema({
-  name: { type: String, required: true, uppercase: true },
+  name: { type: String, required: true, uppercase: true, trim: true },
   headquarter: {
     type: Schema.Types.ObjectId,
     ref: "Headquarter",

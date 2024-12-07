@@ -203,11 +203,7 @@ const getHolidaysByYear = asyncHandler(async (req, res) => {
       .sort({ date: 1 }); // Sort holidays by date for better presentation
 
     // Respond with holidays or a message if no holidays are found
-    return res
-      .status(200)
-      .json(
-        new ApiRes(200, holidays, holidays.length ? "" : "No holidays found.")
-      );
+    return res.status(200).json(new ApiRes(200, holidays, ""));
   } catch (error) {
     // Log the error and send an internal server error response
     Logger(error, "error");
