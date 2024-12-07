@@ -295,13 +295,146 @@ const getTourPlan = asyncHandler(async (req, res) => {
 });
 
 const approveTourPlanDates = asyncHandler(async (req, res) => {
-  const selectedPlans = req.body;
+  const role = req.user.role;
+  const _id = req.params._id;
+  const selectedPlanDates = req.body;
 
-  if (!Array.isArray(selectedPlans) || selectedPlans.length === 0) {
+  // Validate input
+  if (!Array.isArray(selectedPlanDates) || selectedPlanDates.length === 0) {
     return res
       .status(400)
       .json(new ApiRes(400, null, "Tour plan entries are required."));
   }
+
+  try {
+    const todayDate = dayjs().date();
+
+    // Fetch the tour plan for the employee
+    const existingTourPlan = await TourPlan.findOne({ empId: _id }).lean();
+
+    if (!existingTourPlan) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, "Tour plan not found for this employee."));
+    }
+
+    // Check approval date constraints for non-admin users
+    if (
+      role !== "ADMIN" &&
+      !existingTourPlan.isExtraDayForApprove &&
+      (todayDate < 20 || todayDate > 27)
+    ) {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            "Tour plan can be approved only between 20 and 27th of every month. Please contact admin."
+          )
+        );
+    }
+
+    const updatedPlans = {};
+
+    // Update tour plan approval status
+    selectedPlanDates.forEach((date) => {
+      const [year, month] = date.split("-");
+
+      if (existingTourPlan.tourPlan?.[year]?.[month]) {
+        const monthlyPlan = existingTourPlan.tourPlan[year][month];
+        const tourDate = monthlyPlan.find((item) => item.date === date);
+
+        if (tourDate && !tourDate.isApproved) {
+          tourDate.isApproved = true;
+
+          // Track changes for efficient saving
+          if (!updatedPlans[year]) updatedPlans[year] = {};
+          if (!updatedPlans[year][month]) updatedPlans[year][month] = [];
+          updatedPlans[year][month].push(tourDate);
+        }
+      }
+    });
+
+    // Directly update only the modified fields in the database
+    const bulkUpdates = [];
+    for (const year in updatedPlans) {
+      for (const month in updatedPlans[year]) {
+        bulkUpdates.push({
+          updateOne: {
+            filter: { empId: _id },
+            update: {
+              [`tourPlan.${year}.${month}`]: updatedPlans[year][month],
+              isExtraDayForApprove: false,
+            },
+          },
+        });
+      }
+    }
+
+    if (bulkUpdates.length > 0) {
+      await TourPlan.bulkWrite(bulkUpdates);
+    }
+
+    return res.status(200).json(new ApiRes(200, null, "Tour plan approved."));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
 });
 
-export { create, update, getTourPlan };
+const allowExtraDay = asyncHandler(async (req, res) => {
+  const { _id } = req.params;
+  const { type } = req.query; // 'create' or 'approve'
+
+  if (!_id || !["create", "approve"].includes(type)) {
+    return res
+      .status(400)
+      .json(
+        new ApiRes(
+          400,
+          null,
+          "Employee ID and a valid type ('create' or 'approve') are required."
+        )
+      );
+  }
+
+  try {
+    const updateField =
+      type === "create" ? "isExtraDayForCreate" : "isExtraDayForApprove";
+
+    // Upsert the document: Create if not exists, update if exists
+    const result = await TourPlan.findOneAndUpdate(
+      { empId: _id },
+      {
+        $set: {
+          [updateField]: true,
+        },
+        $setOnInsert: {
+          empId: _id,
+          tourPlan: {},
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+      }
+    );
+
+    const message =
+      type === "create"
+        ? "Extra day added for creating tour plan successfully."
+        : "Extra day added for approving tour plan successfully.";
+
+    return res.status(200).json(new ApiRes(200, result, message));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+export { create, update, getTourPlan, approveTourPlanDates, allowExtraDay };

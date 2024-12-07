@@ -395,83 +395,62 @@ const getPlacesByHeadquarter = asyncHandler(async (req, res) => {
 });
 // Places API's --->
 
-// API for Headquarter and Places --->
+// API for Headquarter and Places ---> //Downline Included
 const getUsersHeadquarterAndPlaces = asyncHandler(async (req, res) => {
   const _id = req.user._id;
 
   try {
-    // Fetch user and associated headquarter
-    const user = await User.findById(_id)
-      .select("headquarter downLineEmployees")
-      .lean();
-
-    if (!user?.headquarter) {
-      return res
-        .status(404)
-        .json(new ApiRes(404, null, "User headquarter not found."));
-    }
-
-    // Fetch user's headquarter and associated places in parallel
-    const [headquarter, places] = await Promise.all([
-      Headquarter.findOne({ name: user.headquarter }).lean(),
-      Place.find({ headquarter: user.headquarter }).select("name").lean(),
-    ]);
-
+    const user = await User.findById(_id).select(
+      "headquarter downLineEmployees"
+    );
+    const headquarter = await Headquarter.findOne({ name: user.headquarter });
     if (!headquarter) {
       return res
         .status(404)
         .json(new ApiRes(404, null, "Headquarter not found."));
     }
+    const places = await Place.find({ headquarter: headquarter._id }).select(
+      "name"
+    );
 
-    // Initialize unique data storage
+    const allPlacesAndHeadquarter = [];
     const allPlacesAndHeadquarterSet = new Set();
-    allPlacesAndHeadquarterSet.add(headquarter.name);
-    places.forEach((place) => allPlacesAndHeadquarterSet.add(place.name));
 
-    // Recursive function to process downline employees
-    const fetchDownlinePlacesAndHeadquarter = async (employeeIds) => {
-      if (!employeeIds || employeeIds.length === 0) return;
-
-      const employees = await User.find({ _id: { $in: employeeIds } })
-        .select("headquarter downLineEmployees")
-        .lean();
-
-      const downlineHeadquarters = new Set();
-
-      employees.forEach((employee) => {
-        if (employee.headquarter) {
-          downlineHeadquarters.add(employee.headquarter);
-        }
-        if (employee.downLineEmployees?.length > 0) {
-          downlineHeadquarters.add(...employee.downLineEmployees);
+    addUniqueData = (places) => {
+      places.forEach((place) => {
+        if (!allPlacesAndHeadquarterSet.has(place.name)) {
+          allPlacesAndHeadquarterSet.add(place.name);
+          allPlacesAndHeadquarter.push(place.name);
         }
       });
-
-      // Fetch all unique headquarters and places for downline employees
-      const [downlineHeadquarterDocs, downlinePlaceDocs] = await Promise.all([
-        Headquarter.find({
-          name: { $in: Array.from(downlineHeadquarters) },
-        }).lean(),
-        Place.find({
-          headquarter: { $in: Array.from(downlineHeadquarters) },
-        })
-          .select("name")
-          .lean(),
-      ]);
-
-      downlineHeadquarterDocs.forEach((hq) =>
-        allPlacesAndHeadquarterSet.add(hq.name)
-      );
-      downlinePlaceDocs.forEach((place) =>
-        allPlacesAndHeadquarterSet.add(place.name)
-      );
     };
 
-    // Process downline employees recursively
-    await fetchDownlinePlacesAndHeadquarter(user.downLineEmployees);
+    fetchDownlinePlacesAndHeadquarter = async (employeeIds) => {
+      const employees = await User.find({ _id: { $in: employeeIds } }).select(
+        "headquarter downLineEmployees"
+      );
+      for (const employee of employees) {
+        const headquarter = await Headquarter.findOne({
+          name: employee.headquarter,
+        });
+        const places = await Place.find({
+          headquarter: headquarter._id,
+        }).select("name");
+        addUniqueData(Array.from(headquarter.name));
+        addUniqueData(places);
 
-    // Convert the set to an array for the response
-    const allPlacesAndHeadquarter = Array.from(allPlacesAndHeadquarterSet);
+        if (employee.downLineEmployees?.length > 0) {
+          await fetchDownlinePlacesAndHeadquarter(employee.downLineEmployees);
+        }
+      }
+    };
+
+    addUniqueData(Array.from(headquarter.name));
+    addUniqueData(places);
+
+    if (user.downLineEmployees?.length > 0) {
+      await fetchDownlinePlacesAndHeadquarter(user.downLineEmployees);
+    }
 
     return res.status(200).json(new ApiRes(200, allPlacesAndHeadquarter, ""));
   } catch (error) {
