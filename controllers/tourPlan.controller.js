@@ -1,0 +1,151 @@
+import { ApiRes, validateFields } from "../util/api.response.js";
+import { TourPlan } from "../models/tourPlan.models.js";
+import { User } from "../models/user.models.js";
+import { asyncHandler } from "../util/async.handler.js";
+import { Logger } from "../util/logger.js";
+import dayjs from "dayjs";
+
+const getCurrentYearAndNextMonth = () => {
+  const today = dayjs();
+  const currentMonth = today.month() + 1; // Month is zero-indexed in dayjs, so add 1
+  const currentYear = today.year();
+
+  const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
+  const nextYear = currentMonth === 12 ? currentYear + 1 : currentYear;
+
+  return { year: nextYear, month: nextMonth };
+};
+
+const hasDownlineTourPlans = async (empId, year, month) => {
+  try {
+    const user = await User.findById(empId)
+      .select("downlineEmployees _id")
+      .lean();
+
+    if (!user || !user.downlineEmployees?.length) return [];
+
+    const employeeIds = new Set(user.downlineEmployees);
+
+    const employees = await User.find({ _id: { $in: Array.from(employeeIds) } })
+      .select("_id name role empId downlineEmployees")
+      .lean();
+
+    const tourPlans = await TourPlan.find({
+      empId: { $in: employees.map((e) => e._id) },
+      [`tourPlan.${year}.${month}`]: { $exists: true },
+    }).select("empId");
+
+    const employeesWithTourPlans = new Set(
+      tourPlans.map((plan) => plan.empId.toString())
+    );
+
+    const employeesWithoutTourPlans = employees.filter(
+      (employee) => !employeesWithTourPlans.has(employee._id.toString())
+    );
+
+    return employeesWithoutTourPlans.map(
+      (employee) => `${employee.empId} - ${employee.name} [${employee.role}]`
+    );
+  } catch (error) {
+    Logger(error, "error");
+    throw new Error("Error fetching downline tour plans.");
+  }
+};
+
+const create = asyncHandler(async (req, res) => {
+  const { name, role, _id } = req.user;
+  const tourPlan = req.body;
+
+  if (!Array.isArray(tourPlan) || tourPlan.length === 0) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Tour plan entries are required."));
+  }
+
+  try {
+    const { year, month } = getCurrentYearAndNextMonth();
+    const todayDate = dayjs().date();
+
+    let existingTourPlan = await TourPlan.findOne({ empId: _id });
+
+    // Ensure the tour plan exists or create a new one
+    if (!existingTourPlan) {
+      existingTourPlan = new TourPlan({ empId: _id });
+    } else {
+      // Role-based restrictions for creating tour plans
+      const createAllowed =
+        (role === "TBM" && todayDate >= 20 && todayDate <= 25) ||
+        (role !== "TBM" && todayDate >= 20 && todayDate <= 27);
+
+      if (!createAllowed && !existingTourPlan.isExtraDayForCreate) {
+        return res
+          .status(203) // used in android app for warning
+          .json(
+            new ApiRes(
+              203,
+              null,
+              `${name}, You can create tour plans only during the allowed window. Please contact ADMIN for more information.`
+            )
+          );
+      }
+    }
+
+    // Check for downline employees' tour plans (non-TBM roles)
+    if (role !== "TBM") {
+      const employeesWithNoTourPlans = await hasDownlineTourPlans(
+        _id,
+        year,
+        month
+      );
+
+      if (employeesWithNoTourPlans.length > 0) {
+        return res.status(203).json(
+          new ApiRes(
+            203, // used in android app for warning
+            employeesWithNoTourPlans,
+            `${name}, Some of your downline employees do not have tour plans.`
+          )
+        );
+      }
+    }
+
+    // Validate and update the tour plan
+    const tourPlans = existingTourPlan.tourPlan || {};
+
+    if (!tourPlans[year]) tourPlans[year] = {};
+    if (tourPlans[year][month]) {
+      return res.status(203).json(
+        new ApiRes(
+          203, // used in android app for warning
+          null,
+          `${name}, Your tour plan already exists for month ${month}.`
+        )
+      );
+    }
+
+    tourPlans[year][month] = tourPlan;
+
+    existingTourPlan.tourPlan = new Map(Object.entries(tourPlans));
+    existingTourPlan.isExtraDayForCreate = false;
+    existingTourPlan.isExtraDayForUpdate = false;
+
+    await existingTourPlan.save();
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `${name}, Your tour plan has been created successfully for month ${month}.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+export { create };

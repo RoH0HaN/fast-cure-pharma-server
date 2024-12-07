@@ -7,6 +7,7 @@ import { Logger } from "../util/logger.js";
 import jwt from "jsonwebtoken";
 import dayjs from "dayjs";
 import mongoose from "mongoose";
+import { TourPlan } from "../models/tourPlan.models.js";
 
 const initializeLeaveDocument = async (empId, dateOfJoining) => {
   const joiningDate = dayjs(dateOfJoining, "YYYY-MM-DD");
@@ -33,6 +34,16 @@ const initializeLeaveDocument = async (empId, dateOfJoining) => {
       empId,
       updatedOn: dateOfJoining,
       clCount,
+    },
+    { upsert: true }
+  );
+};
+
+const initializeTourPlanDocument = async (empId) => {
+  await TourPlan.updateOne(
+    { empId },
+    {
+      empId,
     },
     { upsert: true }
   );
@@ -337,6 +348,7 @@ const create = asyncHandler(async (req, res) => {
         { new: true }
       );
     }
+    await initializeTourPlanDocument(employee._id);
     await initializeLeaveDocument(employee._id, dateOfJoining);
     return res.status(200).json(new ApiRes(200, null, "User created."));
   } catch (error) {

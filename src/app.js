@@ -23,6 +23,7 @@ import productRoutes from "../routes/product.routes.js";
 import miscRoutes from "../routes/misc.routes.js";
 import holidayRoutes from "../routes/holiday.routes.js";
 import dvlRoutes from "../routes/dvl.routes.js";
+import tourPlanRoutes from "../routes/tourPlan.routes.js";
 
 // Routes
 const apiV1 = "/api/v1";
@@ -33,5 +34,6 @@ app.use(`${apiV1}/products`, productRoutes);
 app.use(`${apiV1}/miscs`, miscRoutes);
 app.use(`${apiV1}/holidays`, holidayRoutes);
 app.use(`${apiV1}/dvls`, dvlRoutes);
+app.use(`${apiV1}/tour-plans`, tourPlanRoutes);
 
 export { app };
