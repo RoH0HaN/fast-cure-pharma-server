@@ -169,7 +169,7 @@ const update = asyncHandler(async (req, res) => {
         .status(404)
         .json(new ApiRes(404, null, `${name}, No tour plan found.`));
     }
-    // Role-based restrictions for creating tour plans
+    //Role-based restrictions for creating tour plans
     const createAllowed =
       (role === "TBM" && todayDate >= 20 && todayDate <= 25) ||
       (role !== "TBM" && todayDate >= 20 && todayDate <= 27);
@@ -201,6 +201,7 @@ const update = asyncHandler(async (req, res) => {
     }
     // Update tour plans
     const existingTourPlanList = tourPlans[year][month];
+
     const updatedTourPlanList = tourPlan.map((item, index) => {
       const currentPlan = existingTourPlanList[index] || {};
 
@@ -208,6 +209,7 @@ const update = asyncHandler(async (req, res) => {
         date: item.date,
         day: item.day,
         place: item.place,
+        remarks: item.remarks,
         isApproved:
           currentPlan.place === item.place ? currentPlan.isApproved : false,
       };
@@ -225,6 +227,10 @@ const update = asyncHandler(async (req, res) => {
         },
       }
     );
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, `${name}, Your tour plan has been updated.`));
   } catch (error) {
     Logger(error, "error");
     return res
@@ -327,10 +333,10 @@ const getTourPlanForEdit = asyncHandler(async (req, res) => {
 
     if (!tourPlans[year] || !tourPlans[year][month]) {
       return res
-        .status(200)
+        .status(300)
         .json(
           new ApiRes(
-            200,
+            300,
             null,
             `${name}, no existing tour plan found to edit, create one first.`
           )
@@ -338,7 +344,7 @@ const getTourPlanForEdit = asyncHandler(async (req, res) => {
     }
 
     return res
-      .status(200)
+      .status(201)
       .json(
         new ApiRes(
           201,
