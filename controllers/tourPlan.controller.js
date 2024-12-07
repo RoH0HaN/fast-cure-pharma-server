@@ -285,7 +285,22 @@ const getTourPlan = asyncHandler(async (req, res) => {
 
     //TODO: need to check area and changed area from the dcr report to show in tour plan
 
-    return res.status(201).json(new ApiRes(201, monthData, "Tour plan found."));
+    const modifiedTourPlan = monthData.map((item) => {
+      return {
+        date: item.date || "date",
+        day: item.day || "day",
+        place: item.place,
+        type: item.type || "type",
+        remarks: item.remarks || "remarks",
+        isApproved: item.isApproved || false,
+        changedArea: "changedArea",
+        reportId: "reportId",
+      };
+    });
+
+    return res
+      .status(201)
+      .json(new ApiRes(201, modifiedTourPlan, "Tour plan found."));
   } catch (error) {
     Logger(error, "error");
     return res
