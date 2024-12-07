@@ -342,7 +342,7 @@ const getTourPlanForEdit = asyncHandler(async (req, res) => {
       .json(
         new ApiRes(
           201,
-          tourPlans,
+          tourPlans[year][month],
           `${name}, an existing tour plan found for month ${month} & year ${year} you can't add a new one until next month's 20th.`
         )
       );
