@@ -5,6 +5,10 @@ import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 import dayjs from "dayjs";
 import { Holiday } from "../models/holiday.models.js";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore.js";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter.js";
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 const getDatesBetween = (fromDate, toDate) => {
   // Parse dates using dayjs
@@ -42,6 +46,16 @@ const getDatesBetween = (fromDate, toDate) => {
   };
 };
 
+const getCurrentMonthWorkingDays = async (empId) => {
+  try {
+    //TODO: Get current month working days from DCR
+
+    return 12;
+  } catch (error) {
+    throw new Error(`${error}, Failed to get current month working days.`);
+  }
+};
+
 const getRemainingLeavesCount = asyncHandler(async (req, res) => {
   const { _id, name } = req.user;
   try {
@@ -51,9 +65,9 @@ const getRemainingLeavesCount = asyncHandler(async (req, res) => {
         .status(404)
         .json(new ApiRes(404, null, `${name}, Your leave record not found.`));
     }
-    return res.status(200).json(
+    return res.status(201).json(
       new ApiRes(
-        200,
+        201,
         {
           cl: leave.clCount,
           pl: leave.plCount,
@@ -269,7 +283,7 @@ const applyLeave = asyncHandler(async (req, res) => {
       .json(
         new ApiRes(
           200,
-          leave,
+          null,
           `${employee.name}, Your ${leaveType} leave has been applied, please wait for approval.`
         )
       );
@@ -290,6 +304,7 @@ const addLeave = asyncHandler(async (req, res) => {
     return;
 
   try {
+    // Validate date range and duration
     const {
       error,
       message,
@@ -299,9 +314,10 @@ const addLeave = asyncHandler(async (req, res) => {
     if (error) {
       return res.status(400).json(new ApiRes(400, null, message));
     }
-    // Check employee existence and leave data in parallel
+
+    // Fetch employee and leave records in parallel
     const [employee, leave] = await Promise.all([
-      User.findById(empId),
+      User.findById(empId).lean(),
       Leave.findOne({ empId }),
     ]);
 
@@ -309,19 +325,16 @@ const addLeave = asyncHandler(async (req, res) => {
       return res.status(404).json(new ApiRes(404, null, "Employee not found."));
     }
 
-    if (leave) {
+    if (!leave) {
       return res
-        .status(400)
+        .status(404)
         .json(
-          new ApiRes(
-            400,
-            null,
-            `${employee.name}, Your leave record not found.`
-          )
+          new ApiRes(404, null, `${employee.name}, Leave record not found.`)
         );
     }
 
-    leave.leaves.push({
+    // Create a new leave entry
+    const newLeave = {
       leaveType: "MEDICAL",
       reason,
       fromDate,
@@ -336,11 +349,13 @@ const addLeave = asyncHandler(async (req, res) => {
         pl: 0,
         lwp: 0,
       },
-    });
+    };
 
+    // Update leave record
+    leave.leaves.push(newLeave);
     await leave.save();
 
-    Logger(`${name}, applied a MEDICAL leave for ${employee.name}.`);
+    Logger(`${name} applied a MEDICAL leave for ${employee.name}.`);
 
     return res
       .status(200)
@@ -348,7 +363,7 @@ const addLeave = asyncHandler(async (req, res) => {
         new ApiRes(
           200,
           null,
-          `${name}, Leave applied successfully for ${employee.name}.`
+          `${name}, MEDICAL Leave applied successfully for ${employee.name}.`
         )
       );
   } catch (error) {
@@ -359,6 +374,483 @@ const addLeave = asyncHandler(async (req, res) => {
   }
 });
 
-const approveLeave = asyncHandler(async (req, res) => {});
+const approveLeave = asyncHandler(async (req, res) => {
+  const name = req.user.name;
+  const { leaveId, empId } = req.body;
 
-export { applyLeave, addLeave, approveLeave, getRemainingLeavesCount };
+  try {
+    // Fetch employee and leave record in parallel
+    const [leave, employee] = await Promise.all([
+      Leave.findOne({ "leaves._id": leaveId }).lean(),
+      User.findById(empId).lean(),
+    ]);
+
+    // Handle missing employee or leave record
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found."));
+    }
+
+    if (!leave) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, Leave record for ${employee.name} not found.`
+          )
+        );
+    }
+
+    // Find the specific leave request
+    const proposedLeave = leave.leaves.find(
+      (l) => l._id.toString() === leaveId
+    );
+
+    if (!proposedLeave) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, Leave request not found with ID ${leaveId}.`
+          )
+        );
+    }
+
+    // Check if the leave is already processed
+    if (proposedLeave.status !== "PENDING") {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            `${name}, Leave request is already ${proposedLeave.status}.`
+          )
+        );
+    }
+
+    // Update leave counts and status
+    const updatedFields = {
+      "leaves.$.status": "APPROVED",
+      "leaves.$.approvedOn": dayjs().format("YYYY-MM-DD"),
+      "leaves.$.approvedBy": name,
+      "leaves.$.clCount": leave.clCount - proposedLeave.usedLeaveCounts.cl,
+      "leaves.$.plCount": leave.plCount - proposedLeave.usedLeaveCounts.pl,
+      "leaves.$.lwpCount": leave.lwpCount + proposedLeave.usedLeaveCounts.lwp,
+    };
+
+    await Leave.updateOne({ "leaves._id": leaveId }, { $set: updatedFields });
+
+    Logger(`${name} approved ${employee.name}'s leave request.`);
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `${name}, ${employee.name}'s leave request approved.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const rejectLeave = asyncHandler(async (req, res) => {
+  const name = req.user.name;
+  const { leaveId, empId } = req.body;
+
+  try {
+    // Fetch employee and leave record in parallel
+    const [leave, employee] = await Promise.all([
+      Leave.findOne({ "leaves._id": leaveId }).lean(),
+      User.findById(empId).lean(),
+    ]);
+
+    // Handle missing employee or leave record
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found."));
+    }
+
+    if (!leave) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, Leave record for ${employee.name} not found.`
+          )
+        );
+    }
+
+    // Find the specific leave request
+    const proposedLeave = leave.leaves.find(
+      (l) => l._id.toString() === leaveId
+    );
+
+    if (!proposedLeave) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, Leave request not found with ID ${leaveId}.`
+          )
+        );
+    }
+
+    // Check if the leave is already processed
+    if (proposedLeave.status === "REJECTED") {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            `${name}, Leave request is already ${proposedLeave.status}.`
+          )
+        );
+    }
+
+    // Update leave counts only if it was previously approved
+    const updatedFields = {
+      "leaves.$.status": "REJECTED",
+      "leaves.$.rejectedOn": dayjs().format("YYYY-MM-DD"),
+      "leaves.$.rejectedBy": name,
+    };
+
+    if (proposedLeave.status === "APPROVED") {
+      updatedFields["leaves.$.clCount"] =
+        leave.clCount + proposedLeave.usedLeaveCounts.cl;
+      updatedFields["leaves.$.plCount"] =
+        leave.plCount + proposedLeave.usedLeaveCounts.pl;
+      updatedFields["leaves.$.lwpCount"] =
+        leave.lwpCount - proposedLeave.usedLeaveCounts.lwp;
+    }
+
+    // Update the leave record
+    await Leave.updateOne({ "leaves._id": leaveId }, { $set: updatedFields });
+
+    Logger(`${name} rejected ${employee.name}'s leave request.`);
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `${name}, ${employee.name}'s leave request rejected.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const deleteLeave = asyncHandler(async (req, res) => {
+  const { name, _id } = req.user; // Employee ID and name
+  const leaveId = req.params.leaveId;
+
+  try {
+    // Use $pull to directly remove the leave record
+    const updateResult = await Leave.updateOne(
+      { empId: _id, "leaves._id": leaveId }, // Match employee and leave ID
+      { $pull: { leaves: { _id: leaveId } } } // Remove the specific leave
+    );
+
+    // Check if any leave was modified
+    if (updateResult.modifiedCount === 0) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `${name}, Leave request not found with ID ${leaveId}.`
+          )
+        );
+    }
+
+    // Log the deletion
+    Logger(`${name} deleted a leave request with ID ${leaveId}.`);
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, `${name}, Your leave request deleted.`));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getPendingLeaves = asyncHandler(async (req, res) => {
+  const { _id, role } = req.user;
+
+  try {
+    // Fetch all pending leaves for admin
+    if (role === "ADMIN") {
+      const pendingLeaves = await Leave.find({ "leaves.status": "PENDING" })
+        .populate("empId", "name empId role")
+        .lean();
+
+      const resultList = pendingLeaves.flatMap((leave) =>
+        leave.leaves
+          .filter((l) => l.status === "PENDING")
+          .map((l) => ({
+            empObjectId: leave.empId._id,
+            name: leave.empId.name,
+            empId: leave.empId.empId,
+            role: leave.empId.role,
+            leaveType: l.leaveType,
+            leaveId: l._id,
+            fromDate: l.fromDate,
+            toDate: l.toDate,
+            duration: l.duration,
+            reason: l.reason,
+            remarks: l.remarks,
+            status: l.status,
+            requestedOn: l.requestedOn,
+            usedLeaveCounts: l.usedLeaveCounts,
+          }))
+      );
+
+      return res.status(200).json(new ApiRes(200, resultList, ""));
+    }
+
+    // Fetch downline employees for non-admin users
+    const employee = await User.findById(_id)
+      .select("downlineEmployees")
+      .lean();
+
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found"));
+    }
+
+    // Fetch all downline employee IDs in a single query
+    const downlineEmployeeIds = await User.aggregate([
+      { $match: { _id } },
+      {
+        $graphLookup: {
+          from: "users",
+          startWith: "$downlineEmployees",
+          connectFromField: "downlineEmployees",
+          connectToField: "_id",
+          as: "downlineEmployeesGraph",
+        },
+      },
+      {
+        $project: {
+          allEmployeeIds: {
+            $concatArrays: [
+              "$downlineEmployees",
+              "$downlineEmployeesGraph._id",
+            ],
+          },
+        },
+      },
+    ]);
+
+    const employeeIds = downlineEmployeeIds[0]?.allEmployeeIds || [_id];
+
+    // Fetch pending leaves for downline employees
+    const pendingLeaves = await Leave.find({
+      empId: { $in: employeeIds },
+      "leaves.status": "PENDING",
+    })
+      .populate("empId", "name empId role")
+      .lean();
+
+    const resultList = pendingLeaves.flatMap((leave) =>
+      leave.leaves
+        .filter((l) => l.status === "PENDING")
+        .map((l) => ({
+          empObjectId: leave.empId._id,
+          name: leave.empId.name,
+          empId: leave.empId.empId,
+          role: leave.empId.role,
+          leaveType: l.leaveType,
+          leaveId: l._id,
+          fromDate: l.fromDate,
+          toDate: l.toDate,
+          duration: l.duration,
+          reason: l.reason,
+          remarks: l.remarks,
+          status: l.status,
+          requestedOn: l.requestedOn,
+          usedLeaveCounts: l.usedLeaveCounts,
+        }))
+    );
+
+    return res.status(200).json(new ApiRes(200, resultList, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getApprovedLeavesByEmployeeAndRange = asyncHandler(async (req, res) => {
+  const { _id, fromDate, toDate } = req.query;
+
+  if (!validateFields(req.query, ["_id", "fromDate", "toDate"], res)) return;
+
+  try {
+    // Check if fromDate is after toDate
+    if (startDate.isAfter(endDate)) {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(400, null, `'${fromDate}' cannot be after '${toDate}'.`)
+        );
+    }
+    // Find the employee by emp_id
+    const employee = await User.findById({ _id }).select("_id name empId role");
+
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found"));
+    }
+
+    // Find the leave record for the employee
+    const leaveRecord = await Leave.findOne({ emp_id });
+
+    if (!leaveRecord) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(404, null, `${employee.name}'s leave record not found`)
+        );
+    }
+
+    const filteredLeaves = leaveRecord.leaves.filter((leave) => {
+      return (
+        dayjs(leave.fromDate).isSameOrAfter(dayjs(fromDate)) &&
+        dayjs(leave.toDate).isSameOrBefore(dayjs(toDate)) &&
+        leave.status !== "PENDING"
+      );
+    });
+
+    const leaveData = filteredLeaves.map((leave) => {
+      return {
+        empObjectId: employee._id,
+        leaveId: leave._id,
+        name: employee.name,
+        empId: employee.empId,
+        role: employee.role,
+        leaveType: leave.leaveType,
+        fromDate: leave.fromDate,
+        toDate: leave.toDate,
+        status: leave.status,
+        reason: leave.reason,
+        duration: leave.duration,
+        requestedOn: leave.requestedOn,
+        approvedOn: leave.approvedOn,
+        rejectedOn: leave.rejectedOn,
+        approvedBy: leave.approvedBy,
+        rejectedBy: leave.rejectedBy,
+        usedLeaveCounts: leave.usedLeaveCounts,
+      };
+    });
+
+    return res
+      .status(201)
+      .json(
+        new ApiRes(
+          201,
+          leaveData,
+          `${employee.name}'s APPROVED leaves found from ${fromDate} to ${toDate}.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+const getEmployeeLeaveMetrics = asyncHandler(async (req, res) => {
+  const _id = req.params._id;
+
+  if (!validateFields(req.params, ["_id"], res)) return;
+
+  try {
+    const employee = await User.findById({ _id }).select("_id name empId role");
+
+    if (!employee) {
+      return res.status(404).json(new ApiRes(404, null, "Employee not found"));
+    }
+
+    const leave = await Leave.findOne({ empId: _id });
+
+    const currentMonthLeaves = leave.leaves.filter((leave) => {
+      return (
+        dayjs(leave.fromDate).format("YYYY-MM") === dayjs().format("YYYY-MM") &&
+        leave.status === "APPROVED"
+      );
+    });
+
+    const clCount = leave.clCount;
+    const plCount = leave.plCount;
+
+    const currentMonthsCl = currentMonthLeaves.filter((leave) => {
+      return leave.usedLeaveCounts.cl > 0;
+    }).length;
+
+    const currentMonthsPl = currentMonthLeaves.filter((leave) => {
+      return leave.usedLeaveCounts.pl > 0;
+    }).length;
+
+    const currentMonthLWP = currentMonthLeaves.filter((leave) => {
+      return leave.usedLeaveCounts.lwp > 0;
+    }).length;
+
+    const currentMonthWorkingDays = await getCurrentMonthWorkingDays(_id);
+
+    return res.status(201).json(
+      new ApiRes(
+        201,
+        {
+          clCount,
+          plCount,
+          currentMonthsCl,
+          currentMonthsPl,
+          excessiveLeave: currentMonthLWP,
+          currentMonthWorkingDays,
+        },
+        ""
+      )
+    );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+export {
+  applyLeave,
+  addLeave,
+  approveLeave,
+  getRemainingLeavesCount,
+  rejectLeave,
+  deleteLeave,
+  getPendingLeaves,
+  getApprovedLeavesByEmployeeAndRange,
+  getEmployeeLeaveMetrics,
+};

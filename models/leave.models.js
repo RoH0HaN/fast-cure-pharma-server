@@ -27,8 +27,10 @@ const leaveRequestSchema = new Schema({
   duration: { type: Number, required: true },
   requestedOn: { type: String, default: new Date().toISOString() },
   usedLeaveCounts: { type: leaveCountsSchema, default: () => ({}) },
-  approvedBy: { type: Schema.Types.ObjectId, ref: "User", required: false },
+  approvedBy: { type: String, default: "", uppercase: true },
+  rejectedBy: { type: String, default: "", uppercase: true },
   approvedOn: { type: String, default: new Date().toISOString() },
+  rejectedOn: { type: String, default: new Date().toISOString() },
   remarks: { type: String, default: "", uppercase: true },
 });
 

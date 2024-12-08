@@ -6,6 +6,10 @@ import { Leave } from "../models/leave.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 import dayjs from "dayjs";
+import isSameOrBefore from "dayjs/plugin/isSameOrBefore.js";
+import isSameOrAfter from "dayjs/plugin/isSameOrAfter.js";
+dayjs.extend(isSameOrAfter);
+dayjs.extend(isSameOrBefore);
 
 const generateDatesArray = (year, month) => {
   const startOfMonth = dayjs(`${year}-${month}-01`); // Start of the month
