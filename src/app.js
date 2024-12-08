@@ -24,6 +24,7 @@ import miscRoutes from "../routes/misc.routes.js";
 import holidayRoutes from "../routes/holiday.routes.js";
 import dvlRoutes from "../routes/dvl.routes.js";
 import tourPlanRoutes from "../routes/tourPlan.routes.js";
+import attendanceRoutes from "../routes/attendance.routes.js";
 
 // Routes
 const apiV1 = "/api/v1";
@@ -35,5 +36,6 @@ app.use(`${apiV1}/miscs`, miscRoutes);
 app.use(`${apiV1}/holidays`, holidayRoutes);
 app.use(`${apiV1}/dvls`, dvlRoutes);
 app.use(`${apiV1}/tour-plans`, tourPlanRoutes);
+app.use(`${apiV1}/attendances`, attendanceRoutes);
 
 export { app };
