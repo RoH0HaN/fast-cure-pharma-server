@@ -18,7 +18,7 @@ router.route("/apply-leave").post(verifyJWT, applyLeave);
 router.route("/add-leave").post(verifyJWT, addLeave);
 router.route("/approve-leave").put(verifyJWT, approveLeave);
 router.route("/reject-leave").put(verifyJWT, rejectLeave);
-router.route("/delete-leave/:leaveId").delete(verifyJWT, deleteLeave);
+router.route("/delete-leave").delete(verifyJWT, deleteLeave);
 router.route("/get-pending-leaves").get(verifyJWT, getPendingLeaves);
 router
   .route("/get-approved-leaves-by-employee-and-range")

@@ -22,15 +22,15 @@ const leaveRequestSchema = new Schema({
     uppercase: true,
   }, // e.g., "Pending", "Approved", "Rejected"
   reason: { type: String, required: true, uppercase: true },
-  fromDate: { type: Date, required: true },
-  toDate: { type: Date, required: true },
+  fromDate: { type: String, required: true },
+  toDate: { type: String, required: true },
   duration: { type: Number, required: true },
-  requestedOn: { type: String, default: new Date().toISOString() },
+  requestedOn: { type: String, default: "" },
   usedLeaveCounts: { type: leaveCountsSchema, default: () => ({}) },
   approvedBy: { type: String, default: "", uppercase: true },
   rejectedBy: { type: String, default: "", uppercase: true },
-  approvedOn: { type: String, default: new Date().toISOString() },
-  rejectedOn: { type: String, default: new Date().toISOString() },
+  approvedOn: { type: String, default: "" },
+  rejectedOn: { type: String, default: "" },
   remarks: { type: String, default: "", uppercase: true },
 });
 

@@ -122,7 +122,7 @@ const applyLeave = asyncHandler(async (req, res) => {
       return res.status(404).json(new ApiRes(404, null, "Employee not found."));
     }
 
-    if (leave) {
+    if (!leave) {
       return res
         .status(400)
         .json(
@@ -134,7 +134,7 @@ const applyLeave = asyncHandler(async (req, res) => {
         );
     }
 
-    let remarks = "Has consecutive";
+    let remarks = "";
 
     if (
       (leave.plCount <= 0 && leaveType === "PRIVILEGED") ||
@@ -187,18 +187,19 @@ const applyLeave = asyncHandler(async (req, res) => {
     });
 
     const hasConsecutiveWeekends = requestedLeaveDates.some((date) => {
-      const previousDay = dayjs(date).subtract(1, "day").format("YYYY-MM-DD");
-      const nextDay = dayjs(date).add(1, "day").format("YYYY-MM-DD");
-      return previousDay.day() === 0 || nextDay.day() === 0;
+      const previousDay = dayjs(date).subtract(1, "day").get("day");
+      const nextDay = dayjs(date).add(1, "day").get("day");
+
+      return previousDay === 0 || nextDay === 0;
     });
 
     if (leaveType !== "LEAVE-WITHOUT-PAY") {
       if (hasConsecutiveHolidays) {
-        remarks += " holidays";
+        remarks = "HAS CONSECUTIVE HOLIDAYS OR WEEKENDS";
       }
 
       if (hasConsecutiveWeekends) {
-        remarks += " weekends";
+        remarks = "HAS CONSECUTIVE HOLIDAYS OR WEEKENDS";
       }
     }
 
@@ -263,8 +264,8 @@ const applyLeave = asyncHandler(async (req, res) => {
       leaveType,
       status: "PENDING",
       reason,
-      fromDate,
-      toDate,
+      fromDate: dayjs(fromDate).format("YYYY-MM-DD"),
+      toDate: dayjs(toDate).format("YYYY-MM-DD"),
       duration: leaveDuration,
       requestedOn: dayjs().format("YYYY-MM-DD"),
       remarks,
@@ -337,8 +338,8 @@ const addLeave = asyncHandler(async (req, res) => {
     const newLeave = {
       leaveType: "MEDICAL",
       reason,
-      fromDate,
-      toDate,
+      fromDate: dayjs(fromDate).format("YYYY-MM-DD"),
+      toDate: dayjs(toDate).format("YYYY-MM-DD"),
       duration: leaveDuration,
       status: "APPROVED",
       requestedOn: dayjs().format("YYYY-MM-DD"),
@@ -402,6 +403,8 @@ const approveLeave = asyncHandler(async (req, res) => {
         );
     }
 
+    console.log(leave);
+
     // Find the specific leave request
     const proposedLeave = leave.leaves.find(
       (l) => l._id.toString() === leaveId
@@ -437,9 +440,9 @@ const approveLeave = asyncHandler(async (req, res) => {
       "leaves.$.status": "APPROVED",
       "leaves.$.approvedOn": dayjs().format("YYYY-MM-DD"),
       "leaves.$.approvedBy": name,
-      "leaves.$.clCount": leave.clCount - proposedLeave.usedLeaveCounts.cl,
-      "leaves.$.plCount": leave.plCount - proposedLeave.usedLeaveCounts.pl,
-      "leaves.$.lwpCount": leave.lwpCount + proposedLeave.usedLeaveCounts.lwp,
+      clCount: leave.clCount - proposedLeave.usedLeaveCounts.cl,
+      plCount: leave.plCount - proposedLeave.usedLeaveCounts.pl,
+      lwpCount: leave.lwpCount + proposedLeave.usedLeaveCounts.lwp,
     };
 
     await Leave.updateOne({ "leaves._id": leaveId }, { $set: updatedFields });
@@ -560,35 +563,45 @@ const rejectLeave = asyncHandler(async (req, res) => {
 });
 
 const deleteLeave = asyncHandler(async (req, res) => {
-  const { name, _id } = req.user; // Employee ID and name
-  const leaveId = req.params.leaveId;
+  const role = req.user.role;
+  const { leaveId, name } = req.query;
+
+  if (!validateFields(req.query, ["leaveId", "name"], res)) return;
 
   try {
     // Use $pull to directly remove the leave record
-    const updateResult = await Leave.updateOne(
-      { empId: _id, "leaves._id": leaveId }, // Match employee and leave ID
-      { $pull: { leaves: { _id: leaveId } } } // Remove the specific leave
-    );
+    const leave = await Leave.findOne({ "leaves._id": leaveId });
 
-    // Check if any leave was modified
-    if (updateResult.modifiedCount === 0) {
+    if (!leave) {
       return res
         .status(404)
-        .json(
-          new ApiRes(
-            404,
-            null,
-            `${name}, Leave request not found with ID ${leaveId}.`
-          )
-        );
+        .json(new ApiRes(404, null, `${name}'s leave request not found.`));
     }
 
+    let proposedLeave = leave.leaves.find((l) => l._id.toString() === leaveId);
+
+    if (!proposedLeave) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, `${name}'s leave request not found.`));
+    }
+
+    if (proposedLeave.status === "APPROVED" && role === "ADMIN") {
+      leave.clCount += proposedLeave.usedLeaveCounts.cl;
+      leave.plCount += proposedLeave.usedLeaveCounts.pl;
+      leave.lwpCount -= proposedLeave.usedLeaveCounts.lwp;
+    }
+
+    leave.leaves.pull({ _id: leaveId });
+
+    await leave.save();
+
     // Log the deletion
-    Logger(`${name} deleted a leave request with ID ${leaveId}.`);
+    Logger(`A leave request of ${name} was deleted with ID ${leaveId}.`);
 
     return res
       .status(200)
-      .json(new ApiRes(200, null, `${name}, Your leave request deleted.`));
+      .json(new ApiRes(200, null, `${name}'s leave request deleted.`));
   } catch (error) {
     Logger(error, "error");
     return res
@@ -711,7 +724,7 @@ const getApprovedLeavesByEmployeeAndRange = asyncHandler(async (req, res) => {
 
   try {
     // Check if fromDate is after toDate
-    if (startDate.isAfter(endDate)) {
+    if (dayjs(fromDate).isAfter(dayjs(toDate))) {
       return res
         .status(400)
         .json(
@@ -726,7 +739,7 @@ const getApprovedLeavesByEmployeeAndRange = asyncHandler(async (req, res) => {
     }
 
     // Find the leave record for the employee
-    const leaveRecord = await Leave.findOne({ emp_id });
+    const leaveRecord = await Leave.findOne({ empId: employee._id });
 
     if (!leaveRecord) {
       return res
@@ -743,6 +756,18 @@ const getApprovedLeavesByEmployeeAndRange = asyncHandler(async (req, res) => {
         leave.status !== "PENDING"
       );
     });
+
+    if (filteredLeaves.length === 0) {
+      return res
+        .status(300)
+        .json(
+          new ApiRes(
+            300,
+            [],
+            `${employee.name}'s APPROVED leaves not found from ${fromDate} to ${toDate}.`
+          )
+        );
+    }
 
     const leaveData = filteredLeaves.map((leave) => {
       return {

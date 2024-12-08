@@ -787,7 +787,11 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
     const addEmployee = (employee) => {
       if (!processedSet.has(employee._id.toString())) {
         processedSet.add(employee._id.toString());
-        downlines.push({ _id: employee._id, name: employee.name });
+        downlines.push({
+          _id: employee._id,
+          name: employee.name,
+          empId: employee.empId,
+        });
       }
     };
 
@@ -796,7 +800,7 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
       // Fetch all downline employees in a single query
       const employees = await User.find({
         _id: { $in: downLineEmployees },
-      }).select("_id name role downLineEmployees");
+      }).select("_id empId name role downLineEmployees");
 
       for (const employee of employees) {
         addEmployee(employee);
@@ -812,13 +816,13 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
     if (role === "ADMIN" || role === "HR/OH") {
       // Fetch all employees
       const allEmployees = await User.find({ role: { $ne: "ADMIN" } }).select(
-        "_id name"
+        "_id name empId"
       );
       allEmployees.forEach(addEmployee);
     } else {
       // For other roles, fetch the current user's record and their downlines
       const currentUser = await User.findById(_id).select(
-        "_id name role downLineEmployees"
+        "_id empId name role downLineEmployees"
       );
 
       addEmployee(currentUser);

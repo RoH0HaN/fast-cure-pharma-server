@@ -84,7 +84,7 @@ const create = asyncHandler(async (req, res) => {
 const getAttendance = asyncHandler(async (req, res) => {
   const { empId: _id, year, month } = req.query;
 
-  if (!validateFields(req.query, ["empId"], res)) return;
+  if (!validateFields(req.query, ["empId", "year", "month"], res)) return;
 
   try {
     // Generate all dates for the specified month
