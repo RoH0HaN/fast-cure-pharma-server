@@ -269,25 +269,20 @@ const getTourPlan = asyncHandler(async (req, res) => {
     });
 
     if (!tourPlan) {
-      return res.status(201).json(new ApiRes(201, [], "Tour plan not found."));
+      return res.status(300).json(new ApiRes(300, [], "Tour plan not found."));
     }
 
-    if (tourPlan.tourPlan.size === 0) {
+    let tourPlans = Object.fromEntries(tourPlan.tourPlan || {});
+
+    if (!tourPlans[year] || !tourPlans[year][month]) {
       return res
-        .status(201)
-        .json(new ApiRes(201, [], "Tour plan not found for this month."));
+        .status(300)
+        .json(new ApiRes(300, [], "Tour plan not found for this month."));
     }
-
-    const yearData = tourPlan.tourPlan.get(year);
+    const yearData = tourPlans[year];
     const monthData = yearData[month];
 
-    if (!monthData) {
-      return res
-        .status(201)
-        .json(new ApiRes(201, [], "Tour plan not found for this month."));
-    }
-
-    const tourPlanDates = monthData.map((item) => item.date);
+    // const tourPlanDates = monthData.map((item) => item.date);
 
     //TODO: need to check area and changed area from the dcr report to show in tour plan
 
@@ -304,10 +299,21 @@ const getTourPlan = asyncHandler(async (req, res) => {
       };
     });
 
-    return res
-      .status(201)
-      .json(new ApiRes(201, modifiedTourPlan, "Tour plan found."));
+    return res.status(201).json(
+      new ApiRes(
+        201,
+        {
+          empId: _id,
+          tourPlan: modifiedTourPlan,
+          isExtraDayForCreate: tourPlan.isExtraDayForCreate,
+          isExtraDayForApprove: tourPlan.isExtraDayForApprove,
+        },
+        "Tour plan found."
+      )
+    );
   } catch (error) {
+    console.log(error);
+
     Logger(error, "error");
     return res
       .status(500)
