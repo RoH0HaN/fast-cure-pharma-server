@@ -19,7 +19,7 @@
   "author": "Rohan Debnath",
   "license": "ISC",
   "dependencies": {
-    "axios": "^1.7.7",
+    "axios": "^1.7.9",
     "bcrypt": "^5.1.1",
     "body-parser": "^1.20.2",
     "com.fastcurepharma.app": "file:",

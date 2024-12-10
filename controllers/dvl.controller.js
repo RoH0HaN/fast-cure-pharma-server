@@ -4,25 +4,6 @@ import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
 import { User } from "../models/user.models.js";
 
-const getReasonForPending = async (dvl) => {
-  const { isNeedToDelete, isNeedToUpdate, dataToBeUpdated } = dvl;
-  if (
-    isNeedToDelete &&
-    !isNeedToUpdate &&
-    Object.keys(dataToBeUpdated).length === 0
-  ) {
-    return "REQUEST FOR DELETE";
-  } else if (
-    !isNeedToDelete &&
-    isNeedToUpdate &&
-    Object.keys(dataToBeUpdated).length > 0
-  ) {
-    return "REQUEST FOR UPDATE";
-  } else {
-    return "REQUEST FOR APPROVE";
-  }
-};
-
 const create = asyncHandler(async (req, res) => {
   // Extract fields from the request body
   const {
