@@ -20,8 +20,10 @@ import {
   getMonthlyDCRReportStats,
   getFullDCRReport,
   getCurrentDCRReportStatuses,
+  uploadCompleteCallPhoto,
 } from "../controllers/dcr.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
 
@@ -38,8 +40,10 @@ router.route("/add-cs-report").put(verifyJWT, addCSReport);
 //--- This API is for adding 'DOCTOR' and 'CS' reports. --->
 
 //--- This API is for deleting 'DOCTOR' and 'CS' reports. --->
-router.route("/delete-doctor-report").delete(verifyJWT, deleteDoctorReport);
-router.route("/delete-cs-report").delete(verifyJWT, deleteCSReport);
+router
+  .route("/delete-doctor-report/:reportId")
+  .delete(verifyJWT, deleteDoctorReport);
+router.route("/delete-cs-report/:reportId").delete(verifyJWT, deleteCSReport);
 //--- This API is for deleting 'DOCTOR' and 'CS' reports. --->
 
 //--- This API is for completing 'DOCTOR' and 'CS' reports call. --->
@@ -91,5 +95,14 @@ router
   .route("/get-current-dcr-report-statuses")
   .get(verifyJWT, getCurrentDCRReportStatuses);
 //---CURRENT DCR REPORT API'S --->
+
+//--- IMAGE UPLOAD API ONLY FOR ANDROID --->
+router
+  .route("/image/upload")
+  .post(
+    verifyJWT,
+    upload.fields([{ name: "image", maxCount: 1 }]),
+    uploadCompleteCallPhoto
+  );
 
 export default router;

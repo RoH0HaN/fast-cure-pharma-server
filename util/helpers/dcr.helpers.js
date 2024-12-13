@@ -6,6 +6,7 @@ import axios from "axios";
 import { Logger } from "../logger.js";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
+import { DCR } from "../../models/dcr.models.js";
 
 dotenv.config({
   path: "../../.env",
@@ -17,13 +18,12 @@ const getDistanceBetweenTwoLocations = async (origin, destination) => {
       "https://api.olamaps.io/routing/v1/distanceMatrix/basic",
       {
         params: {
-          origin: `${origin.latitude},${origin.longitude}`,
-          destination: `${destination.latitude},${destination.longitude}`,
+          origins: `${origin.latitude},${origin.longitude}`,
+          destinations: `${destination.latitude},${destination.longitude}`,
           api_key: process.env.API_KEY,
         },
       }
     );
-
     const distanceInMeters = data?.rows[0]?.elements[0]?.distance;
     const distanceInKilometers = Number(distanceInMeters) / 1000; // Convert to kilometers
     return distanceInKilometers;
@@ -132,6 +132,18 @@ const checkForHoliday = async (date) => {
 const updateDvlDoctorLocation = async (dvlId, location) => {
   try {
     const existingDVL = await DVL.findById(dvlId);
+    if (existingDVL.locations.length == 0) {
+      // Add location to the DVL array
+      existingDVL.locations.push(location);
+
+      // Save DVL back to the database
+      await existingDVL.save();
+      Logger(
+        `New location added for ${existingDVL.docName}, with id ${dvlId}.`,
+        "info"
+      );
+      return true;
+    }
     const destinationCoords = existingDVL.locations
       .map((loc) => `${loc.latitude},${loc.longitude}`)
       .join("|");

@@ -8,6 +8,7 @@ import {
   archive,
   getPendingDVLs,
   getApprovedDVLs,
+  getDoctorNamesBasedOnArea,
 } from "../controllers/dvl.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 
@@ -21,5 +22,9 @@ router.route("/reject/:_id").put(verifyJWT, reject);
 router.route("/archive/:_id").put(verifyJWT, archive);
 router.route("/get-pending-dvls").get(verifyJWT, getPendingDVLs);
 router.route("/get-approved-dvls/:_id").get(verifyJWT, getApprovedDVLs);
+
+router
+  .route("/get-doctor-names-based-on-area/:area")
+  .get(verifyJWT, getDoctorNamesBasedOnArea);
 
 export default router;

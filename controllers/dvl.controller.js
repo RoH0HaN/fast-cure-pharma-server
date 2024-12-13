@@ -48,10 +48,10 @@ const create = asyncHandler(async (req, res) => {
       docName: docName.trim(),
       qualification: qualification.trim(),
       area: area?.trim(),
-      prodOne: prodOne?.trim(),
-      prodTwo: prodTwo?.trim(),
-      prodThree: prodThree?.trim(),
-      prodFour: prodFour?.trim(),
+      prodOne: prodOne?.trim() === "" ? "N/A" : prodOne?.trim(),
+      prodTwo: prodTwo?.trim() === "" ? "N/A" : prodTwo?.trim(),
+      prodThree: prodThree?.trim() === "" ? "N/A" : prodThree?.trim(),
+      prodFour: prodFour?.trim() === "" ? "N/A" : prodFour?.trim(),
       freqVisit,
       addedBy,
     });
@@ -624,6 +624,35 @@ const getApprovedDVLs = asyncHandler(async (req, res) => {
   }
 });
 
+const getDoctorNamesBasedOnArea = asyncHandler(async (req, res) => {
+  const area = req.params.area;
+  try {
+    const doctors = await DVL.find({ area: area }).select(
+      "docName _id prodOne prodTwo prodThree prodFour area"
+    );
+
+    const doctorData = doctors.map((doctor) => {
+      return {
+        _id: doctor._id,
+        docName: doctor.docName,
+        prodOne: doctor.prodOne === "N/A" ? ["N/A"] : [doctor.prodOne, "N/A"],
+        prodTwo: doctor.prodTwo === "N/A" ? ["N/A"] : [doctor.prodTwo, "N/A"],
+        prodThree:
+          doctor.prodThree === "N/A" ? ["N/A"] : [doctor.prodThree, "N/A"],
+        prodFour:
+          doctor.prodFour === "N/A" ? ["N/A"] : [doctor.prodFour, "N/A"],
+      };
+    });
+
+    return res.status(200).json(new ApiRes(200, doctorData, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
 export {
   create,
   requestDelete,
@@ -633,4 +662,5 @@ export {
   archive,
   getPendingDVLs,
   getApprovedDVLs,
+  getDoctorNamesBasedOnArea,
 };

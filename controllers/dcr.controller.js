@@ -6,6 +6,7 @@ import {
   getTotalTravelingDistanceFromDCRReport,
   markAttendance,
 } from "../util/helpers/dcr.helpers.js";
+import { uploadImageToFirebase } from "../util/upload.images.firebase.js";
 import { getDatesBetween } from "../util/helpers/leave.helpers.js";
 import { ApiRes, validateFields } from "../util/api.response.js";
 import { DCR } from "../models/dcr.models.js";
@@ -15,16 +16,15 @@ import { User } from "../models/user.models.js";
 import dayjs from "dayjs";
 import { Attendance } from "../models/attendance.models.js";
 import { DVL } from "../models/dvl.models.js";
+import mongoose from "mongoose";
 
 //--- This API is for 'WORKING DAY', 'JOINING DAY', 'CAMP DAY' reports. --->
 const createDailyReport = asyncHandler(async (req, res) => {
   const { _id, name } = req.user;
-  const { workingStatus, startLocation, area } = req.body;
+  const { workStatus, startLocation, area } = req.body;
   const reportDate = dayjs().format("YYYY-MM-DD");
 
-  if (
-    !validateFields(req.body, ["workingStatus", "startLocation", "area"], res)
-  )
+  if (!validateFields(req.body, ["workStatus", "startLocation", "area"], res))
     return;
 
   try {
@@ -49,7 +49,7 @@ const createDailyReport = asyncHandler(async (req, res) => {
 
     const newReport = new DCR({
       createdBy: _id,
-      workingStatus,
+      workStatus,
       startLocation,
       reportDate,
       isHoliday: await checkForHoliday(reportDate),
@@ -59,7 +59,7 @@ const createDailyReport = asyncHandler(async (req, res) => {
     await newReport.save();
 
     Logger(
-      `${name}'s ${workingStatus} report for ${reportDate} has been created from near ${startLocation.area}.`
+      `${name}'s ${workStatus} report for ${reportDate} has been created from near ${startLocation.area}.`
     );
 
     return res
@@ -68,7 +68,7 @@ const createDailyReport = asyncHandler(async (req, res) => {
         new ApiRes(
           201,
           newReport._id,
-          `${name}, Your ${workingStatus} report for ${reportDate} has been created with start location near ${startLocation.area}.`
+          `${name}, Your ${workStatus} report for ${reportDate} has been created with start location near ${startLocation.area}.`
         )
       );
   } catch (error) {
@@ -107,7 +107,7 @@ const createMeetingReport = asyncHandler(async (req, res) => {
     // Prepare an array of reports for batch insertion
     const reports = meetingDayDates.dates.map(async (date) => ({
       createdBy: _id,
-      workingStatus: "MEETING DAY",
+      workStatus: "MEETING DAY",
       reportDate: date,
       isMeeting: true,
       isHoliday: await checkForHoliday(date),
@@ -228,7 +228,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
     if (!parentReportExists && workWithDetails.parentRole !== "ADMIN") {
       const parentNewReport = new DCR({
         createdBy: workWithDetails.parentId,
-        workingStatus: "TRAINING DAY",
+        workStatus: "TRAINING DAY",
         reportDate,
         isHoliday,
         area,
@@ -245,7 +245,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
     // Create the new report for the user
     const newDCRReport = new DCR({
       createdBy: _id,
-      workingStatus: "TRAINING DAY",
+      workStatus: "TRAINING DAY",
       reportDate,
       isHoliday,
       area,
@@ -327,10 +327,10 @@ const addDoctorReport = asyncHandler(async (req, res) => {
       _id: doctorReportId,
       doctor,
       area,
-      prodOne: prodOne?.length > 0 ? prodOne : "N/A",
-      prodTwo: prodTwo?.length > 0 ? prodTwo : "N/A",
-      prodThree: prodThree?.length > 0 ? prodThree : "N/A",
-      prodFour: prodFour?.length > 0 ? prodFour : "N/A",
+      prodOne: prodOne !== "" ? prodOne : "N/A",
+      prodTwo: prodTwo !== "" ? prodTwo : "N/A",
+      prodThree: prodThree !== "" ? prodThree : "N/A",
+      prodFour: prodFour !== "" ? prodFour : "N/A",
     };
 
     // If workWithEmployee is "SELF", add doctor only to the current user's report
@@ -492,7 +492,7 @@ const addCSReport = asyncHandler(async (req, res) => {
       _id: doctorReportId,
       visitType,
       area,
-      csName,
+      name: csName,
     };
 
     // If workWithEmployee is "SELF", add doctor only to the current user's report
@@ -1049,7 +1049,7 @@ const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
         new ApiRes(
           200,
           null,
-          `${name}, Doctor report with ID ${reportId} mark as incomplete'd.`
+          `${name}, Doctor report with ID ${reportId} mark as incomplete.`
         )
       );
   } catch (error) {
@@ -1125,7 +1125,7 @@ const incompleteCSReportCall = asyncHandler(async (req, res) => {
         new ApiRes(
           200,
           null,
-          `${name}, Chemist/Stockist report with ID ${reportId} mark as incomplete'd.`
+          `${name}, Chemist/Stockist report with ID ${reportId} mark as incomplete.`
         )
       );
   } catch (error) {
@@ -1157,10 +1157,16 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
     }
 
     const isDoctorReportsCompleted = dcrReport.doctorReports.every(
-      (report) => report.completedAt && report.reportStatus === "COMPLETE CALL"
+      (report) =>
+        report.completedAt &&
+        (report.reportStatus === "COMPLETE CALL" ||
+          report.reportStatus === "INCOMPLETE CALL")
     );
     const isCSReportsCompleted = dcrReport.csReports.every(
-      (report) => report.completedAt && report.reportStatus === "COMPLETE CALL"
+      (report) =>
+        report.completedAt &&
+        (report.reportStatus === "COMPLETE CALL" ||
+          report.reportStatus === "INCOMPLETE CALL")
     );
 
     if (!isDoctorReportsCompleted || !isCSReportsCompleted) {
@@ -1685,7 +1691,16 @@ const getFullDCRReport = asyncHandler(async (req, res) => {
   }
 
   try {
-    const dcrReport = await DCR.findById(reportId);
+    const dcrReport = await DCR.findById(reportId).populate([
+      {
+        path: "createdBy",
+        select: "name role empId",
+      },
+      {
+        path: "doctorReports.doctor",
+        select: "docName",
+      },
+    ]);
 
     if (!dcrReport) {
       return res
@@ -1721,7 +1736,7 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
       DCR.findOne({ createdBy: userId, reportDate: today }),
     ]);
 
-    let dynamicMessage = `${name}, your status for today: `;
+    let dynamicMessage = `${name}, `;
     let responseData = {};
 
     // Check attendance
@@ -1790,7 +1805,7 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
     } else if (responseData.isCampDay) {
       dynamicMessage += `Today is a camp day.`;
     } else if (responseData.isReportComplete) {
-      dynamicMessage += `Well done! ${name}, You've completed your report for today. You traveled ${totalDistance} kms today.`;
+      dynamicMessage += `You've completed your report for today. You traveled ${totalDistance} kms today.`;
     } else {
       dynamicMessage += `Your report is active with work status "${workStatus}".`;
     }
@@ -1809,6 +1824,34 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
   } catch (error) {
     Logger(error, "error");
     return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+//---IMAGE UPLOAD API ONLY FOR ANDROID --->
+const uploadCompleteCallPhoto = asyncHandler(async (req, res) => {
+  const { name } = req.user;
+  try {
+    const file = req.files.image[0];
+    if (!file) {
+      return res.status(400).json({ message: "No image file uploaded" });
+    }
+    const filePath = file.path;
+    const downloadURL = await uploadImageToFirebase(filePath);
+
+    res
+      .status(201)
+      .json(
+        new ApiRes(
+          201,
+          { downloadURL },
+          `${name}, Your image is uploaded, Now you can complete your call.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    res
       .status(500)
       .json(new ApiRes(500, null, error.message || "Internal server error."));
   }
@@ -1835,4 +1878,5 @@ export {
   getMonthlyDCRReportStats,
   getFullDCRReport,
   getCurrentDCRReportStatuses,
+  uploadCompleteCallPhoto,
 };

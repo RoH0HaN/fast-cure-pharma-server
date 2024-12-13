@@ -478,7 +478,7 @@ const getTodayTourPlanArea = asyncHandler(async (req, res) => {
 
     let todayArea = "";
 
-    if (!tourPlan?.tourPlans[year] || !tourPlan?.tourPlans[year][month]) {
+    if (!tourPlan?.tourPlans?.[year] || !tourPlan?.tourPlans?.[year]?.[month]) {
       return res
         .status(300)
         .json(
@@ -490,7 +490,7 @@ const getTodayTourPlanArea = asyncHandler(async (req, res) => {
         );
     }
 
-    const todayPlan = tourPlan.tourPlans[year][month].find(
+    const todayPlan = tourPlan.tourPlans?.[year]?.[month]?.find(
       (item) => item.date === today && item.isApproved == true
     );
 
