@@ -466,6 +466,47 @@ const allowExtraDay = asyncHandler(async (req, res) => {
   }
 });
 
+const getTodayTourPlanArea = asyncHandler(async (req, res) => {
+  const { _id: userId, name } = req.user;
+
+  try {
+    const [year, month] = dayjs().format("YYYY-MM").split("-");
+    const today = dayjs().format("YYYY-MM-DD");
+    const tourPlan = await TourPlan.findOne({
+      empId: userId,
+    });
+
+    let todayArea = "";
+
+    if (!tourPlan?.tourPlans[year] || !tourPlan?.tourPlans[year][month]) {
+      return res
+        .status(300)
+        .json(
+          new ApiRes(
+            300,
+            null,
+            `${name}, You don't have an existing tour plan.`
+          )
+        );
+    }
+
+    const todayPlan = tourPlan.tourPlans[year][month].find(
+      (item) => item.date === today
+    );
+
+    if (todayPlan) {
+      todayArea = todayPlan.area;
+    }
+
+    return res.status(200).json(new ApiRes(200, todayArea, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
 export {
   create,
   update,
@@ -473,4 +514,5 @@ export {
   approveTourPlanDates,
   allowExtraDay,
   getTourPlanForEdit,
+  getTodayTourPlanArea,
 };
