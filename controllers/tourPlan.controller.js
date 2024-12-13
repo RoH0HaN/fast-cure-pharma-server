@@ -491,7 +491,7 @@ const getTodayTourPlanArea = asyncHandler(async (req, res) => {
     }
 
     const todayPlan = tourPlan.tourPlans[year][month].find(
-      (item) => item.date === today
+      (item) => item.date === today && item.isApproved == true
     );
 
     if (todayPlan) {
