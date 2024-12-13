@@ -126,13 +126,18 @@ const getAttendance = asyncHandler(async (req, res) => {
         const holidayTitle = holidayMap.get(date);
         const attendanceObj = attendanceData[date];
 
-        if (attendanceObj) {
+        if (attendanceObj && attendanceObj.title !== "WEEK OFF") {
           return {
             start: dayjs(date).toDate(),
             end: dayjs(date).toDate(),
-            link: ["WORKING DAY", "CAMP DAY", "MEETING DAY"].includes(
-              attendanceObj.title
-            )
+            link: [
+              "WORKING DAY",
+              "CAMP DAY",
+              "MEETING DAY",
+              "JOINING DAY",
+              "TRAINING DAY",
+              "ADMIN DAY",
+            ].includes(attendanceObj.title)
               ? `/report/#reportId`
               : null,
             startDate: date,
@@ -140,6 +145,30 @@ const getAttendance = asyncHandler(async (req, res) => {
             title: attendanceObj.title,
             reportId: "#reportId",
             isHoliday: !!holidayTitle,
+            holiday: holidayTitle || null,
+          };
+        } else if (attendanceObj && attendanceObj.title === "WEEK OFF") {
+          return {
+            start: dayjs(date).toDate(),
+            end: dayjs(date).toDate(),
+            link: null,
+            startDate: date,
+            endDate: date,
+            title: "WEEK OFF",
+            reportId: null,
+            isHoliday: false,
+            holiday: holidayTitle || null,
+          };
+        } else if (attendanceObj && attendanceObj.title === "ABSENT") {
+          return {
+            start: dayjs(date).toDate(),
+            end: dayjs(date).toDate(),
+            link: null,
+            startDate: date,
+            endDate: date,
+            title: "ABSENT",
+            reportId: null,
+            isHoliday: false,
             holiday: holidayTitle || null,
           };
         } else if (leaveSet.has(date)) {

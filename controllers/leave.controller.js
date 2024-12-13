@@ -361,8 +361,6 @@ const approveLeave = asyncHandler(async (req, res) => {
         );
     }
 
-    console.log(leave);
-
     // Find the specific leave request
     const proposedLeave = leave.leaves.find(
       (l) => l._id.toString() === leaveId
