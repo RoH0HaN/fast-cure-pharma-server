@@ -1746,7 +1746,11 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
     // Process today's report
     if (!todayReport) {
       dynamicMessage += `No report found. Please create one.`;
-      return res.status(200).json(new ApiRes(200, null, dynamicMessage));
+      return res
+        .status(201)
+        .json(
+          new ApiRes(201, { message: dynamicMessage, createReport: true }, "")
+        );
     }
 
     // Extract report details
