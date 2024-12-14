@@ -1789,8 +1789,8 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
       isJoiningDay: workStatus === "JOINING DAY",
       isMeetingDay: isMeeting && workStatus === "MEETING DAY",
       isReportComplete: reportStatus == "COMPLETE",
-      startLocationNeeded: !!startLocation.latitude,
-      endLocationNeeded: !!endLocation.latitude,
+      startLocationNeeded: !startLocation.latitude,
+      endLocationNeeded: !endLocation.latitude,
       meetingDetails,
     };
 
@@ -1811,11 +1811,11 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
       dynamicMessage += `Your report is active with work status "${workStatus}".`;
     }
 
-    if (!responseData.startLocationNeeded) {
+    if (responseData.startLocationNeeded) {
       dynamicMessage += ` Please add your start location.`;
     }
 
-    if (!responseData.endLocationNeeded) {
+    if (responseData.endLocationNeeded) {
       dynamicMessage += ` End location is not set.`;
     }
 
