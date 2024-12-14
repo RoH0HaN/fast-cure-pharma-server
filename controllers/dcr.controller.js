@@ -1782,14 +1782,15 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
 
     responseData = {
       reportId,
+      isWorkingDay: workStatus === "WORKING DAY",
       isAdminDay: workStatus === "ADMIN DAY",
       isTrainingDay: workStatus === "TRAINING DAY",
       isCampDay: workStatus === "CAMP DAY",
       isJoiningDay: workStatus === "JOINING DAY",
       isMeetingDay: isMeeting && workStatus === "MEETING DAY",
       isReportComplete: reportStatus == "COMPLETE",
-      startLocationNeeded: !!startLocation,
-      endLocationNeeded: !!endLocation,
+      startLocationNeeded: !!startLocation.latitude,
+      endLocationNeeded: !!endLocation.latitude,
       meetingDetails,
     };
 
