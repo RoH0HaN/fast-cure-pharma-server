@@ -6,7 +6,10 @@ import axios from "axios";
 import { Logger } from "../logger.js";
 import dotenv from "dotenv";
 import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween.js";
+dayjs.extend(isBetween);
 import { DCR } from "../../models/dcr.models.js";
+import { Leave } from "../../models/leave.models.js";
 
 dotenv.config({
   path: "../../.env",
@@ -119,7 +122,7 @@ const getWorkWithEmployeeId = async (userId, workWithEmployeeRole) => {
 };
 
 const checkForHoliday = async (date) => {
-  const holidays = await Holiday.find({ h_date: date })
+  const holidays = await Holiday.find({ date: date })
     .select("-_id date")
     .lean();
 
@@ -239,26 +242,57 @@ const markAttendance = async (userId, name, title) => {
     const date = dayjs().format("YYYY-MM-DD");
     const [year, month] = date.split("-");
 
-    // Construct the dynamic path for attendance
-    const attendancePath = `attendance.${year}.${month}.${date}`;
+    // Find the attendance record
+    let attendanceRecord = await Attendance.findOne({ empId: userId });
 
-    // Perform an atomic update
-    const updateResult = await Attendance.updateOne(
-      { empId: userId, [attendancePath]: { $exists: false } }, // Ensure no duplicate entry
-      {
-        $set: { [attendancePath]: { title } }, // Add new attendance entry
-        $setOnInsert: { empId: userId }, // Initialize attendance if not existing
-      },
-      { upsert: true } // Insert if no document exists
-    );
+    if (!attendanceRecord) {
+      // Create a new record if it doesn't exist
+      attendanceRecord = new Attendance({
+        empId: userId,
+        attendance: {
+          [year]: {
+            [month]: {
+              [date]: { title },
+            },
+          },
+        },
+      });
+      await attendanceRecord.save();
+      Logger(
+        `${name}'s attendance has been marked as "${title}" on ${date}.`,
+        "info"
+      );
+      return true;
+    }
 
-    // Check if the update was applied or skipped (duplicate entry)
-    if (updateResult.matchedCount > 0 && updateResult.modifiedCount === 0) {
+    // Check if attendance for the date already exists
+    const attendanceForDate =
+      attendanceRecord.attendance?.[year]?.[month]?.[date] || null;
+
+    if (attendanceForDate?.title) {
+      Logger(
+        `${name}'s attendance for ${date} already exists as "${attendanceForDate.title}".`,
+        "info"
+      );
       return false;
     }
 
+    // Ensure nested objects exist
+    if (!attendanceRecord.attendance[year]) {
+      attendanceRecord.attendance[year] = {};
+    }
+    if (!attendanceRecord.attendance[year][month]) {
+      attendanceRecord.attendance[year][month] = {};
+    }
+
+    attendanceRecord.attendance[year][month][date] = { title };
+
+    // Mark the field as modified and save
+    attendanceRecord.markModified("attendance");
+    await attendanceRecord.save();
+
     Logger(
-      `${name}'s attendance has been marked for WORKING DAY on ${date}.`,
+      `${name}'s attendance has been marked as "${title}" on ${date}.`,
       "info"
     );
 
@@ -269,6 +303,54 @@ const markAttendance = async (userId, name, title) => {
   }
 };
 
+const checkForWeekOffAndLeave = async (empId) => {
+  try {
+    const currentDate = dayjs().format("YYYY-MM-DD");
+    const [year, month, day] = currentDate.split("-");
+
+    // Fetch leave and attendance records concurrently
+    const [leaveRecord, existingAttendance] = await Promise.all([
+      Leave.findOne({ empId }).lean(),
+      Attendance.findOne({ empId }).lean(),
+    ]);
+
+    // Initialize result
+    const result = {
+      isWeekOff: false,
+      isOnLeave: false,
+    };
+
+    // Check for Week Off
+    const attendance =
+      existingAttendance?.attendance?.[year]?.[month]?.[currentDate];
+    if (attendance?.title === "WEEK OFF") {
+      result.isWeekOff = true;
+    }
+
+    // Check for Leave
+    if (leaveRecord?.leaves?.length) {
+      const todayLeave = leaveRecord.leaves.some(
+        (leave) =>
+          dayjs(currentDate).isBetween(
+            dayjs(leave.fromDate),
+            dayjs(leave.toDate),
+            "day",
+            "[]" // Inclusive of both `fromDate` and `toDate`
+          ) && leave.status !== "PENDING"
+      );
+
+      if (todayLeave) {
+        result.isOnLeave = true;
+      }
+    }
+
+    return result;
+  } catch (error) {
+    Logger(error, "error");
+    throw new Error("Failed to check for week off and leave.");
+  }
+};
+
 export {
   getPlaceNameFromLocation,
   getWorkWithEmployeeId,
@@ -276,4 +358,5 @@ export {
   updateDvlDoctorLocation,
   getTotalTravelingDistanceFromDCRReport,
   markAttendance,
+  checkForWeekOffAndLeave,
 };

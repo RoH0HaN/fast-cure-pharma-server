@@ -3,6 +3,7 @@ import {
   createDailyReport,
   createMeetingReport,
   createTrainingReport,
+  createAdminDayReport,
   addDoctorReport,
   addCSReport,
   deleteDoctorReport,
@@ -33,6 +34,8 @@ router.route("/create-daily-report").post(verifyJWT, createDailyReport);
 router.route("/create-meeting-report").post(verifyJWT, createMeetingReport);
 //--- This API is for creating 'TRAINING DAY' reports. --->
 router.route("/create-training-report").post(verifyJWT, createTrainingReport);
+//--- This API is for creating 'ADMIN DAY' reports. --->
+router.route("/create-admin-day-report").post(verifyJWT, createAdminDayReport);
 
 //--- This API is for adding 'DOCTOR' and 'CS' reports. --->
 router.route("/add-doctor-report").put(verifyJWT, addDoctorReport);

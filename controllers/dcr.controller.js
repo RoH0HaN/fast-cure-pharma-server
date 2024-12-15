@@ -5,6 +5,7 @@ import {
   updateDvlDoctorLocation,
   getTotalTravelingDistanceFromDCRReport,
   markAttendance,
+  checkForWeekOffAndLeave,
 } from "../util/helpers/dcr.helpers.js";
 import { uploadImageToFirebase } from "../util/upload.images.firebase.js";
 import { getDatesBetween } from "../util/helpers/leave.helpers.js";
@@ -22,12 +23,12 @@ import mongoose from "mongoose";
 const createDailyReport = asyncHandler(async (req, res) => {
   const { _id, name } = req.user;
   const { workStatus, startLocation, area } = req.body;
-  const reportDate = dayjs().format("YYYY-MM-DD");
 
   if (!validateFields(req.body, ["workStatus", "startLocation", "area"], res))
     return;
 
   try {
+    const reportDate = dayjs().format("YYYY-MM-DD");
     const existingReport = await DCR.findOne({
       createdBy: _id,
       reportDate,
@@ -46,13 +47,13 @@ const createDailyReport = asyncHandler(async (req, res) => {
     }
 
     startLocation.area = await getPlaceNameFromLocation(startLocation);
-
+    const isHoliday = await checkForHoliday(reportDate);
     const newReport = new DCR({
       createdBy: _id,
       workStatus,
       startLocation,
       reportDate,
-      isHoliday: await checkForHoliday(reportDate),
+      isHoliday: isHoliday,
       area,
     });
 
@@ -105,19 +106,21 @@ const createMeetingReport = asyncHandler(async (req, res) => {
     }
 
     // Prepare an array of reports for batch insertion
-    const reports = meetingDayDates.dates.map(async (date) => ({
-      createdBy: _id,
-      workStatus: "MEETING DAY",
-      reportDate: date,
-      isMeeting: true,
-      isHoliday: await checkForHoliday(date),
-      meetingDetails: {
-        title,
-        description,
-        startDate,
-        endDate,
-      },
-    }));
+    const reports = await Promise.all(
+      meetingDayDates.dates.map(async (date) => ({
+        createdBy: _id,
+        workStatus: "MEETING DAY",
+        reportDate: date,
+        isMeeting: true,
+        isHoliday: await checkForHoliday(date),
+        meetingDetails: {
+          title,
+          description,
+          startDate,
+          endDate,
+        },
+      }))
+    );
 
     // Use bulk insert for better performance
     await DCR.insertMany(reports);
@@ -224,6 +227,22 @@ const createTrainingReport = asyncHandler(async (req, res) => {
 
     const isHoliday = await checkForHoliday(reportDate);
 
+    const weekOffAndLeaveStatus = await checkForWeekOffAndLeave(
+      workWithDetails.parentId
+    );
+
+    if (weekOffAndLeaveStatus.isOnLeave || weekOffAndLeaveStatus.isWeekOff) {
+      return res
+        .status(401)
+        .json(
+          new ApiRes(
+            401,
+            null,
+            `${workWithDetails.parentName} is on leave or week off. Cannot add training report with him.`
+          )
+        );
+    }
+
     // Create parent report if required
     if (!parentReportExists && workWithDetails.parentRole !== "ADMIN") {
       const parentNewReport = new DCR({
@@ -249,6 +268,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
       reportDate,
       isHoliday,
       area,
+      startLocation,
       trainingReport: {
         area,
         workWithEmployeeRole: workWithDetails.parentRole,
@@ -270,6 +290,80 @@ const createTrainingReport = asyncHandler(async (req, res) => {
           null,
           `${name}, your training report has been created with ${workWithEmployee} ${workWithDetails.parentName}.`
         )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
+//--- This API is for creating 'ADMIN DAY' reports. --->
+const createAdminDayReport = asyncHandler(async (req, res) => {
+  const { _id, name } = req.user;
+  const { startLocation } = req.body;
+
+  // Validate required fields
+  if (!validateFields(req.body, ["startLocation"], res)) return;
+
+  try {
+    const reportDate = dayjs().format("YYYY-MM-DD");
+    const existingReport = await DCR.findOne({
+      createdBy: _id,
+      reportDate,
+    });
+
+    if (existingReport) {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            `${name}, A report already exists for ${reportDate}.`
+          )
+        );
+    }
+
+    startLocation.area = await getPlaceNameFromLocation(startLocation);
+
+    const isHoliday = await checkForHoliday(reportDate);
+
+    const newReport = new DCR({
+      createdBy: _id,
+      workStatus: "ADMIN DAY",
+      startLocation,
+      endLocation: startLocation,
+      reportDate,
+      isHoliday: isHoliday,
+      reportStatus: "COMPLETE",
+    });
+
+    const attendanceStatus = await markAttendance(_id, name, "ADMIN DAY");
+
+    if (!attendanceStatus) {
+      return res
+        .status(300)
+        .json(
+          new ApiRes(
+            300,
+            null,
+            `Sorry, ${name}, Your attendance is already exists for 'ADMIN DAY' for ${reportDate}.`
+          )
+        );
+    }
+
+    await newReport.save();
+
+    Logger(
+      `${name}'s ADMIN DAY report for ${reportDate} has been created from near ${startLocation.area}.`
+    );
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(200, null, `${name}, Today is marked as ADMIN DAY for you.`)
       );
   } catch (error) {
     Logger(error, "error");
@@ -371,12 +465,28 @@ const addDoctorReport = asyncHandler(async (req, res) => {
       workWithEmployee !== workWithDetails.parentRole
     ) {
       return res
-        .status(400)
+        .status(401)
         .json(
           new ApiRes(
-            400,
+            401,
             null,
             `Your requested work with employee is not found in your up line.`
+          )
+        );
+    }
+
+    const weekOffAndLeaveStatus = await checkForWeekOffAndLeave(
+      workWithDetails.parentId
+    );
+
+    if (weekOffAndLeaveStatus.isOnLeave || weekOffAndLeaveStatus.isWeekOff) {
+      return res
+        .status(401)
+        .json(
+          new ApiRes(
+            401,
+            null,
+            `${workWithDetails.parentName} is on leave or week off. Cannot add doctor report with him.`
           )
         );
     }
@@ -420,12 +530,13 @@ const addDoctorReport = asyncHandler(async (req, res) => {
           { new: true }
         );
       } else {
+        const isHoliday = await checkForHoliday(existingReport.reportDate);
         // Parent's report doesn't exist, so create a new one
         const parentNewReport = new DCR({
           createdBy: workWithDetails.parentId,
           workStatus: existingReport.workStatus,
           reportDate: existingReport.reportDate,
-          isHoliday: await checkForHoliday(existingReport.reportDate),
+          isHoliday: isHoliday,
           area: existingReport.area,
           isMeeting: existingReport.isMeeting || false,
           meetingDetails: existingReport.meetingDetails || null,
@@ -543,6 +654,22 @@ const addCSReport = asyncHandler(async (req, res) => {
         );
     }
 
+    const weekOffAndLeaveStatus = await checkForWeekOffAndLeave(
+      workWithDetails.parentId
+    );
+
+    if (weekOffAndLeaveStatus.isOnLeave || weekOffAndLeaveStatus.isWeekOff) {
+      return res
+        .status(401)
+        .json(
+          new ApiRes(
+            401,
+            null,
+            `${workWithDetails.parentName} is on leave or week off. Cannot add CS report with him.`
+          )
+        );
+    }
+
     // Add doctor to the user's report with parent role and ID
     await DCR.findByIdAndUpdate(
       reportId,
@@ -582,22 +709,25 @@ const addCSReport = asyncHandler(async (req, res) => {
           { new: true }
         );
       } else {
+        const isHoliday = await checkForHoliday(existingReport.reportDate);
         // Parent's report doesn't exist, so create a new one
-        const parentNewReport = new DCR({
-          createdBy: workWithDetails.parentId,
-          workStatus: existingReport.workStatus,
-          reportDate: existingReport.reportDate,
-          isHoliday: await checkForHoliday(existingReport.reportDate),
-          isMeeting: existingReport.isMeeting || false,
-          meetingDetails: existingReport.meetingDetails || null,
-          csReports: [
-            {
-              ...csReport,
-              workWithEmployeeRole: role,
-              workWithEmployeeId: _id,
-            },
-          ],
-        });
+        const parentNewReport = await Promise.all(
+          new DCR({
+            createdBy: workWithDetails.parentId,
+            workStatus: existingReport.workStatus,
+            reportDate: existingReport.reportDate,
+            isHoliday: isHoliday,
+            isMeeting: existingReport.isMeeting || false,
+            meetingDetails: existingReport.meetingDetails || null,
+            csReports: [
+              {
+                ...csReport,
+                workWithEmployeeRole: role,
+                workWithEmployeeId: _id,
+              },
+            ],
+          })
+        );
 
         await parentNewReport.save();
       }
@@ -1156,20 +1286,19 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
         );
     }
 
-    const isDoctorReportsCompleted = dcrReport.doctorReports.every(
-      (report) =>
-        report.completedAt &&
-        (report.reportStatus === "COMPLETE CALL" ||
-          report.reportStatus === "INCOMPLETE CALL")
-    );
-    const isCSReportsCompleted = dcrReport.csReports.every(
-      (report) =>
-        report.completedAt &&
-        (report.reportStatus === "COMPLETE CALL" ||
-          report.reportStatus === "INCOMPLETE CALL")
-    );
+    const areAllReportsCompleted = (reports) =>
+      reports.length === 0 ||
+      reports.every(
+        (report) =>
+          report.completedAt &&
+          (report.reportStatus === "COMPLETE CALL" ||
+            report.reportStatus === "INCOMPLETE CALL")
+      );
 
-    if (!isDoctorReportsCompleted || !isCSReportsCompleted) {
+    if (
+      !areAllReportsCompleted(dcrReport.doctorReports) ||
+      !areAllReportsCompleted(dcrReport.csReports)
+    ) {
       return res
         .status(300)
         .json(
@@ -1283,7 +1412,7 @@ const getAvailableWeekOffDays = asyncHandler(async (req, res) => {
       Attendance.findOne({ empId: userId }),
       DCR.find({
         createdBy: userId,
-        reportStatus: "COMPLETED",
+        reportStatus: "COMPLETE",
         isHoliday: true,
         reportDate: {
           $gte: `${year}-${month}-01`,
@@ -1347,12 +1476,13 @@ const takeWeekOff = asyncHandler(async (req, res) => {
         );
     }
 
-    const [year, month, day] = dayjs().format("YYYY-MM-DD").split("-");
+    const today = dayjs().format("YYYY-MM-DD");
+    const [year, month, day] = today.split("-");
 
     const [dcrReports, existingAttendance] = await Promise.all([
       DCR.findOne({
         createdBy: userId,
-        reportStatus: "COMPLETED",
+        reportStatus: "COMPLETE",
         isHoliday: true,
         reportDate: weekOffDate,
       }),
@@ -1402,11 +1532,12 @@ const takeWeekOff = asyncHandler(async (req, res) => {
         );
     }
 
-    existingAttendance.attendance[year][month][day] = {
+    existingAttendance.attendance[year][month][today] = {
       title: "WEEK OFF",
       date: weekOffDate,
     };
 
+    existingAttendance.markModified("attendance");
     await existingAttendance.save();
 
     return res
@@ -1487,7 +1618,7 @@ const getDCRAttendantReportsOfAnyYearsMonth = asyncHandler(async (req, res) => {
       {
         createdBy: userId,
         reportDate: { $gte: startOfMonth, $lt: endOfMonth },
-        reportStatus: "COMPLETED",
+        reportStatus: "COMPLETE",
       },
       {
         _id: 1,
@@ -1587,7 +1718,7 @@ const getMonthlyDCRReportStats = asyncHandler(async (req, res) => {
         createdBy: userId,
         workStatus: { $ne: "ADMIN DAY" },
         reportDate: { $gte: startOfMonth, $lt: endOfMonth },
-        reportStatus: "COMPLETED",
+        reportStatus: "COMPLETE",
       }),
       DVL.find({ addedBy: userId }),
     ]);
@@ -1730,45 +1861,43 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
   try {
     const today = dayjs().format("YYYY-MM-DD");
 
-    // Fetch attendance and DCR report in parallel
-    const [existingAttendance, todayReport] = await Promise.all([
-      Attendance.findOne({ empId: userId }),
-      DCR.findOne({ createdBy: userId, reportDate: today }),
+    // Fetch week off/leave status and today's report in parallel
+    const [weekOffAndLeaveStatus, todayReport] = await Promise.all([
+      checkForWeekOffAndLeave(userId),
+      DCR.findOne({ createdBy: userId, reportDate: today }).lean(),
     ]);
 
-    let dynamicMessage = `${name}, `;
-    let responseData = {};
+    const { isOnLeave, isWeekOff } = weekOffAndLeaveStatus;
 
-    // Check attendance
-    if (existingAttendance) {
-      const [year, month, day] = today.split("-");
-      const attendance = existingAttendance.attendance?.[year]?.[month]?.[day];
-
-      if (attendance?.title === "WEEK OFF") {
-        dynamicMessage += `You are on a week off today (${attendance.date}).`;
-        return res
-          .status(200)
-          .json(
-            new ApiRes(
-              200,
-              { isWeekOff: true, message: dynamicMessage },
-              dynamicMessage
-            )
-          );
-      }
+    // Handle leave and week off cases early
+    if (isOnLeave) {
+      return res.status(201).json(
+        new ApiRes(201, {
+          isOnLeave: true,
+          message: `${name}, You are on a leave today. Enjoy your leave.`,
+        })
+      );
+    }
+    if (isWeekOff) {
+      return res.status(201).json(
+        new ApiRes(201, {
+          isWeekOff: true,
+          message: `${name}, You are on a week off today. Enjoy your week off.`,
+        })
+      );
     }
 
-    // Process today's report
+    // Handle case when no report is found
     if (!todayReport) {
-      dynamicMessage += `No report found. Please create one.`;
-      return res
-        .status(201)
-        .json(
-          new ApiRes(201, { message: dynamicMessage, createReport: true }, "")
-        );
+      return res.status(201).json(
+        new ApiRes(201, {
+          createReport: true,
+          message: `${name}, No report found. Please create one.`,
+        })
+      );
     }
 
-    // Extract report details
+    // Extract and prepare response data
     const {
       _id: reportId,
       isMeeting,
@@ -1780,7 +1909,7 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
       totalDistance,
     } = todayReport;
 
-    responseData = {
+    const responseData = {
       reportId,
       isWorkingDay: workStatus === "WORKING DAY",
       isAdminDay: workStatus === "ADMIN DAY",
@@ -1788,39 +1917,54 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
       isCampDay: workStatus === "CAMP DAY",
       isJoiningDay: workStatus === "JOINING DAY",
       isMeetingDay: isMeeting && workStatus === "MEETING DAY",
-      isReportComplete: reportStatus == "COMPLETE",
+      isReportComplete: reportStatus === "COMPLETE",
       startLocationNeeded: !startLocation.latitude,
       endLocationNeeded: !endLocation.latitude,
       meetingDetails,
     };
 
-    // Check if it's a joining day
-    if (responseData.isJoiningDay) {
-      dynamicMessage += `Today is your joining day. Welcome onboard!, Follow your manager's instructions.`;
-    } else if (responseData.isAdminDay) {
-      dynamicMessage += `Today is 'Administration Work' day, No day plan needed.`;
-    } else if (responseData.isTrainingDay) {
-      dynamicMessage += `Today is a training day, Follow your trainer's instructions.`;
-    } else if (responseData.isMeetingDay) {
-      dynamicMessage += `Today is a meeting day.`;
-    } else if (responseData.isCampDay) {
-      dynamicMessage += `Today is a camp day.`;
-    } else if (responseData.isReportComplete) {
-      dynamicMessage += `You've completed your report for today. You traveled ${totalDistance} kms today.`;
-    } else {
-      dynamicMessage += `Your report is active with work status "${workStatus}".`;
+    // Construct dynamic message based on work status
+    let dynamicMessage = `${name}, `;
+    switch (workStatus) {
+      case "JOINING DAY":
+        dynamicMessage +=
+          "Today is your joining day. Welcome onboard! Follow your manager's instructions.";
+        break;
+      case "ADMIN DAY":
+        dynamicMessage +=
+          "Today is an 'Administration Work' day. No day plan needed.";
+        break;
+      case "TRAINING DAY":
+        dynamicMessage +=
+          "Today is a training day. Follow your trainer's instructions.";
+        break;
+      case "MEETING DAY":
+        if (isMeeting) dynamicMessage += "Today is a meeting day.";
+        break;
+      case "CAMP DAY":
+        dynamicMessage += "Today is a camp day.";
+        break;
     }
 
+    if (workStatus !== "ADMIN DAY") {
+      if (responseData.isReportComplete) {
+        dynamicMessage = `You've completed your report for today. You traveled ${totalDistance} kms today.`;
+      } else {
+        dynamicMessage += `Your report is active with work status "${workStatus}".`;
+      }
+    }
+
+    // Add location-related messages
     if (responseData.startLocationNeeded) {
-      dynamicMessage += ` Please add your start location.`;
+      dynamicMessage += " Please add your start location.";
     }
-
     if (responseData.endLocationNeeded) {
-      dynamicMessage += ` End location is not set.`;
+      dynamicMessage += " End location is not set.";
     }
 
     responseData.message = dynamicMessage;
 
+    // Send final response
     return res.status(201).json(new ApiRes(201, responseData, ""));
   } catch (error) {
     Logger(error, "error");
@@ -1862,6 +2006,7 @@ export {
   createDailyReport,
   createMeetingReport,
   createTrainingReport,
+  createAdminDayReport,
   addDoctorReport,
   addCSReport,
   deleteDoctorReport,

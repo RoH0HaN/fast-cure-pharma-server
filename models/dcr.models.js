@@ -127,8 +127,8 @@ const trainingReportSchema = new Schema({
 
 const meetingDetailsSchema = new Schema({
   title: { type: String, default: "", uppercase: true },
-  startDate: { type: Date, required: true, uppercase: true },
-  endDate: { type: Date, required: true, uppercase: true },
+  startDate: { type: String, required: true, uppercase: true },
+  endDate: { type: String, required: true, uppercase: true },
   description: { type: String, default: "", uppercase: true },
 });
 
