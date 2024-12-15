@@ -5,6 +5,7 @@ import {
 import { ApiRes, validateFields } from "../util/api.response.js";
 import { TourPlan } from "../models/tourPlan.models.js";
 import { User } from "../models/user.models.js";
+import { DCR } from "../models/dcr.models.js";
 import { Headquarter, Place } from "../models/headquarter.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
@@ -28,7 +29,7 @@ const create = asyncHandler(async (req, res) => {
 
     // Ensure the tour plan exists or create a new one
     if (!existingTourPlan) {
-      existingTourPlan = new TourPlan({ empId: _id });
+      existingTourPlan = await TourPlan.create({ empId: _id });
     } else {
       // Role-based restrictions for creating tour plans
       const createAllowed =
@@ -68,7 +69,7 @@ const create = asyncHandler(async (req, res) => {
     }
 
     // Validate and update the tour plan
-    const tourPlans = existingTourPlan.tourPlan || {};
+    const tourPlans = Object.fromEntries(existingTourPlan.tourPlan) || {};
 
     if (!tourPlans[year]) tourPlans[year] = {};
     if (tourPlans[year][month]) {
@@ -204,55 +205,120 @@ const getTourPlan = asyncHandler(async (req, res) => {
   }
 
   try {
+    // Fetch employee details
     const employee = await User.findById(_id).select("headquarter role");
 
     if (!employee) {
       return res.status(404).json(new ApiRes(404, null, "Employee not found."));
     }
 
+    // Fetch places under headquarter if not TBM
+    let placesUnderHeadquarter = [];
     if (employee.role !== "TBM") {
       const employeeHeadquarter = await Headquarter.findOne({
         name: employee.headquarter,
       })
         .select("places")
-        .populate("places");
+        .populate("places", "name type");
 
-      const placesUnderHeadquarter = employeeHeadquarter.places;
-      placesUnderHeadquarter.push({ name: employee.headquarter, type: "HQ" });
+      if (employeeHeadquarter?.places) {
+        placesUnderHeadquarter = [...employeeHeadquarter.places];
+        placesUnderHeadquarter.push({ name: employee.headquarter, type: "HQ" });
+      }
     }
 
-    const tourPlan = await TourPlan.findOne({
-      empId: _id,
-    });
-
+    // Fetch tour plan for the employee
+    const tourPlan = await TourPlan.findOne({ empId: _id });
     if (!tourPlan) {
-      return res.status(300).json(new ApiRes(300, [], "Tour plan not found."));
+      return res
+        .status(300)
+        .json(new ApiRes(300, null, "Tour plan not found."));
     }
 
-    let tourPlans = Object.fromEntries(tourPlan.tourPlan || {});
+    const tourPlans = Object.fromEntries(tourPlan.tourPlan || {});
 
     if (!tourPlans[year] || !tourPlans[year][month]) {
       return res
         .status(300)
-        .json(new ApiRes(300, [], "Tour plan not found for this month."));
+        .json(new ApiRes(300, null, "Tour plan not found for this month."));
     }
-    const yearData = tourPlans[year];
-    const monthData = yearData[month];
 
-    // const tourPlanDates = monthData.map((item) => item.date);
+    const monthData = tourPlans[year][month];
+    const tourPlanDates = monthData.map((item) => item.date);
 
-    //TODO: need to check area and changed area from the dcr report to show in tour plan
+    // Fetch DCR reports for the tour plan dates
+    const dcrReports = await DCR.find({
+      reportDate: { $in: tourPlanDates },
+      $or: [{ createdBy: _id }],
+    }).select("reportDate area");
 
+    // Build maps for quick lookup
+    const dcrReportsMap = new Map(
+      dcrReports.map((report) => [report.reportDate, report.area])
+    );
+    const dcrReportsExistsMap = new Map(
+      dcrReports.map((report) => [report.reportDate, report._id])
+    );
+
+    // Fetch all unique places mentioned in the tour plan
+    const uniquePlaces = [
+      ...new Set(monthData.map((item) => item.place).filter(Boolean)),
+    ];
+
+    // Fetch all places and headquarters data in one go
+    const placesDetails = await Place.find({
+      name: { $in: uniquePlaces },
+    }).select("name type");
+    const hqDetails = await Headquarter.find({
+      name: { $in: uniquePlaces },
+    }).select("name type");
+
+    const placesMap = new Map(
+      [...placesDetails, ...hqDetails].map((place) => [place.name, place])
+    );
+
+    // Build the modified tour plan
     const modifiedTourPlan = monthData.map((item) => {
+      const place = item.place;
+      const date = item.date;
+      const changedArea = dcrReportsMap.get(date) || "";
+      const remarks = item.remarks || "";
+
+      let area = "";
+      let type = "";
+
+      if (place) {
+        const placeDetails = placesMap.get(place);
+        if (placeDetails) {
+          area = placeDetails.name;
+          type = placeDetails.type;
+        }
+
+        // Adjust type based on headquarter places for non-TBM employees
+        if (employee.role !== "TBM") {
+          type =
+            placesUnderHeadquarter.find((hqPlace) => hqPlace.name === area)
+              ?.type || "OUT";
+        }
+
+        // Update type based on changed area
+        if (changedArea) {
+          const changedPlaceDetails = placesMap.get(changedArea);
+          type = changedPlaceDetails ? changedPlaceDetails.type : "HQ";
+        }
+      }
+
+      const reportId = dcrReportsExistsMap.get(date);
       return {
         date: item.date || "date",
         day: item.day || "day",
-        place: item.place,
-        type: item.type || "type",
-        remarks: item.remarks || "remarks",
+        place: area,
+        type: type || "",
+        remarks: remarks || "",
         isApproved: item.isApproved || false,
-        changedArea: "changedArea",
-        reportId: "reportId",
+        changedArea: changedArea,
+        reportId: reportId,
+        isReportExists: Boolean(reportId),
       };
     });
 
@@ -269,8 +335,6 @@ const getTourPlan = asyncHandler(async (req, res) => {
       )
     );
   } catch (error) {
-    console.log(error);
-
     Logger(error, "error");
     return res
       .status(500)
@@ -289,7 +353,15 @@ const getTourPlanForEdit = asyncHandler(async (req, res) => {
     });
 
     if (!tourPlan) {
-      return res.status(404).json(new ApiRes(404, null, ""));
+      return res
+        .status(300)
+        .json(
+          new ApiRes(
+            300,
+            null,
+            `${name}, no existing tour plan found to edit, create one first.`
+          )
+        );
     }
 
     let tourPlans = Object.fromEntries(tourPlan.tourPlan);
@@ -347,7 +419,7 @@ const approveTourPlanDates = asyncHandler(async (req, res) => {
         .json(new ApiRes(404, null, "Tour plan not found for this employee."));
     }
 
-    // Check approval date constraints for non-admin users
+    //Check approval date constraints for non-admin users
     if (
       role !== "ADMIN" &&
       !existingTourPlan.isExtraDayForApprove &&
@@ -364,49 +436,50 @@ const approveTourPlanDates = asyncHandler(async (req, res) => {
         );
     }
 
-    const updatedPlans = {};
+    const tourPlans = existingTourPlan.tourPlan || {};
+    const updates = [];
 
-    // Update tour plan approval status
+    // Prepare updates for only the necessary fields
     selectedPlanDates.forEach((date) => {
-      const [year, month] = date.split("-");
+      let [year, month] = date.split("-");
+      month = Number(month);
 
-      if (existingTourPlan.tourPlan?.[year]?.[month]) {
-        const monthlyPlan = existingTourPlan.tourPlan[year][month];
+      if (tourPlans[year]?.[month]) {
+        const monthlyPlan = tourPlans[year][month];
         const tourDate = monthlyPlan.find((item) => item.date === date);
 
         if (tourDate && !tourDate.isApproved) {
           tourDate.isApproved = true;
 
-          // Track changes for efficient saving
-          if (!updatedPlans[year]) updatedPlans[year] = {};
-          if (!updatedPlans[year][month]) updatedPlans[year][month] = [];
-          updatedPlans[year][month].push(tourDate);
+          // Push the update to the list of bulk updates
+          updates.push({
+            filter: {
+              empId: _id,
+              [`tourPlan.${year}.${month}.date`]: date,
+            },
+            update: {
+              $set: {
+                [`tourPlan.${year}.${month}.$.isApproved`]: true,
+                isExtraDayForApprove: false,
+              },
+            },
+          });
         }
       }
     });
 
-    // Directly update only the modified fields in the database
-    const bulkUpdates = [];
-    for (const year in updatedPlans) {
-      for (const month in updatedPlans[year]) {
-        bulkUpdates.push({
-          updateOne: {
-            filter: { empId: _id },
-            update: {
-              [`tourPlan.${year}.${month}`]: updatedPlans[year][month],
-              isExtraDayForApprove: false,
-            },
-          },
-        });
-      }
-    }
+    // Apply bulk updates
+    if (updates.length > 0) {
+      const bulkOps = updates.map((u) => ({
+        updateOne: u,
+      }));
 
-    if (bulkUpdates.length > 0) {
-      await TourPlan.bulkWrite(bulkUpdates);
+      await TourPlan.bulkWrite(bulkOps);
     }
 
     return res.status(200).json(new ApiRes(200, null, "Tour plan approved."));
   } catch (error) {
+    console.log("error", error);
     Logger(error, "error");
     return res
       .status(500)

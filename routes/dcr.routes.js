@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createDailyReport,
+  createDailyReportFromTourPlan,
   createMeetingReport,
   createTrainingReport,
   createAdminDayReport,
@@ -13,6 +14,7 @@ import {
   incompleteDoctorReportCall,
   incompleteCSReportCall,
   completeAnyDCRReport,
+  deleteAnyDCRReport,
   updateStartLocationOfAnyDCRReport,
   getAvailableWeekOffDays,
   takeWeekOff,
@@ -30,6 +32,10 @@ const router = Router();
 
 //--- This API is for 'WORKING DAY', 'JOINING DAY', 'CAMP DAY' reports. --->
 router.route("/create-daily-report").post(verifyJWT, createDailyReport);
+//--- This API is for 'WORKING DAY' reports from 'TOUR PLAN'. --->
+router
+  .route("/create-daily-report-from-tour-plan")
+  .post(verifyJWT, createDailyReportFromTourPlan);
 //--- This API is for 'MEETING DAY' reports. --->
 router.route("/create-meeting-report").post(verifyJWT, createMeetingReport);
 //--- This API is for creating 'TRAINING DAY' reports. --->
@@ -67,6 +73,11 @@ router
 
 //--- This API is for ENDING a report. --->
 router.route("/complete-dcr-report").put(verifyJWT, completeAnyDCRReport); //END DAY
+
+//--- This API is for deleting a report. --->
+router
+  .route("/delete-dcr-report/:reportId")
+  .delete(verifyJWT, deleteAnyDCRReport);
 
 //--- This API is for updating start location of any report. --->
 router

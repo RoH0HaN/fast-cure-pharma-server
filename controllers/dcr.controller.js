@@ -80,6 +80,63 @@ const createDailyReport = asyncHandler(async (req, res) => {
   }
 });
 
+//--- This API is for 'WORKING DAY' reports from 'TOUR PLAN'. --->
+const createDailyReportFromTourPlan = asyncHandler(async (req, res) => {
+  const { _id, name } = req.user;
+  const { reportDate, area } = req.body;
+
+  if (!validateFields(req.body, ["reportDate", "area"], res)) return;
+
+  try {
+    const existingReport = await DCR.findOne({
+      createdBy: _id,
+      reportDate,
+    });
+
+    if (existingReport) {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            `${name}, A report already exists for ${reportDate}.`
+          )
+        );
+    }
+
+    const isHoliday = await checkForHoliday(reportDate);
+    const newReport = new DCR({
+      createdBy: _id,
+      workStatus: "WORKING DAY",
+      reportDate,
+      isHoliday: isHoliday,
+      area,
+    });
+
+    await newReport.save();
+
+    Logger(
+      `${name}'s WORKING DAY report for ${reportDate} has been created from tour plan.`
+    );
+
+    return res
+      .status(201)
+      .json(
+        new ApiRes(
+          201,
+          newReport._id,
+          `${name}, Your WORKING DAY report for ${reportDate} has been created from tour plan.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
 //--- This API is for 'MEETING DAY' reports. --->
 const createMeetingReport = asyncHandler(async (req, res) => {
   const { _id, name } = req.user;
@@ -1356,6 +1413,63 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
   }
 });
 
+//--- This API is used to delete any DCR report [DELETE THE DCR REPORT BY USER] --->
+const deleteAnyDCRReport = asyncHandler(async (req, res) => {
+  const { _id: userId, name } = req.user;
+  const reportId = req.params.reportId;
+
+  if (!reportId) {
+    return res
+      .status(400)
+      .json(new ApiRes(400, null, "Report ID is required."));
+  }
+
+  try {
+    const dcrReport = await DCR.findById(reportId);
+
+    if (!dcrReport) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(
+            404,
+            null,
+            `Sorry, ${name}, You don't have a DCR report for ${reportId}.`
+          )
+        );
+    }
+
+    if (dcrReport.createdBy.toString() !== userId) {
+      return res
+        .status(403)
+        .json(
+          new ApiRes(
+            403,
+            null,
+            `Sorry, ${name}, You don't have permission to delete this DCR report.`
+          )
+        );
+    }
+
+    await DCR.findByIdAndDelete(reportId);
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(
+          200,
+          null,
+          `${name}, Your DCR report with ID ${reportId} deleted.`
+        )
+      );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
 //--- UPDATE START LOCATION OF ANY DCR REPORT --->
 const updateStartLocationOfAnyDCRReport = asyncHandler(async (req, res) => {
   const { name } = req.user;
@@ -1561,15 +1675,20 @@ const takeWeekOff = asyncHandler(async (req, res) => {
 //---VIEW DCR FROM-TO DATE API's --->
 const getDoctorAndCSReportsBetweenDates = asyncHandler(async (req, res) => {
   const { name } = req.user;
-  const { _id: userId, fromDate, endDate } = req.body;
+  const { _id: userId, fromDate, toDate } = req.query;
 
-  if (!validateFields(req.body, ["_id", "fromDate", "endDate"], res)) return;
+  if (!validateFields(req.query, ["_id", "fromDate", "toDate"], res)) return;
 
   try {
     const dcrReports = await DCR.find({
       createdBy: userId,
-      reportDate: { $gte: fromDate, $lte: endDate },
-    }).select("doctorReports csReports");
+      reportDate: { $gte: fromDate, $lte: toDate },
+    })
+      .select("doctorReports csReports")
+      .populate({
+        path: "doctorReports.doctor",
+        select: "docName",
+      });
 
     if (!dcrReports) {
       return res
@@ -1578,7 +1697,7 @@ const getDoctorAndCSReportsBetweenDates = asyncHandler(async (req, res) => {
           new ApiRes(
             404,
             null,
-            `Sorry, ${name}, You don't have any DCR reports between ${fromDate} and ${endDate}.`
+            `Sorry, ${name}, You don't have any DCR reports between ${fromDate} and ${toDate}.`
           )
         );
     }
@@ -1592,7 +1711,7 @@ const getDoctorAndCSReportsBetweenDates = asyncHandler(async (req, res) => {
         new ApiRes(
           201,
           { doctorReports, csReports },
-          `${name}, Reports found between ${fromDate} and ${endDate}.`
+          `${name}, Reports found between ${fromDate} and ${toDate}.`
         )
       );
   } catch (error) {
@@ -1606,7 +1725,7 @@ const getDoctorAndCSReportsBetweenDates = asyncHandler(async (req, res) => {
 //---GET DAILY DCR ATTENDANCE API'S --->
 const getDCRAttendantReportsOfAnyYearsMonth = asyncHandler(async (req, res) => {
   const { name } = req.user;
-  const { _id: userId, year, month } = req.body;
+  const { _id: userId, year, month } = req.query;
 
   try {
     // Generate start and end dates for the month
@@ -2004,6 +2123,7 @@ const uploadCompleteCallPhoto = asyncHandler(async (req, res) => {
 
 export {
   createDailyReport,
+  createDailyReportFromTourPlan,
   createMeetingReport,
   createTrainingReport,
   createAdminDayReport,
@@ -2016,6 +2136,7 @@ export {
   incompleteDoctorReportCall,
   incompleteCSReportCall,
   completeAnyDCRReport,
+  deleteAnyDCRReport,
   updateStartLocationOfAnyDCRReport,
   getAvailableWeekOffDays,
   takeWeekOff,

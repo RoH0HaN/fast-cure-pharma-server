@@ -581,7 +581,7 @@ const getApprovedDVLs = asyncHandler(async (req, res) => {
           isArchived: false,
           addedBy: employee._id,
         })
-          .select("-__v -locations -remarks -isArchived")
+          .select("-__v -remarks -isArchived")
           .populate([
             { path: "addedBy", select: "name role empId" },
             { path: "approvedBy", select: "name role" },
@@ -602,7 +602,7 @@ const getApprovedDVLs = asyncHandler(async (req, res) => {
       isArchived: false,
       addedBy: user._id,
     })
-      .select("-__v -locations -remarks -isArchived")
+      .select("-__v -remarks -isArchived")
       .populate([
         { path: "addedBy", select: "name role empId" },
         { path: "approvedBy", select: "name role" },

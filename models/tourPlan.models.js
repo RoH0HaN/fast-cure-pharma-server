@@ -9,6 +9,7 @@ const tourPlanSchema = new Schema({
   tourPlan: {
     type: Map,
     of: Schema.Types.Mixed,
+    default: {},
   },
   isExtraDayForCreated: { type: Boolean, default: false },
   isExtraDayForApproved: { type: Boolean, default: false },
