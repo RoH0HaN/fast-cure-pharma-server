@@ -137,8 +137,10 @@ const getAttendance = asyncHandler(async (req, res) => {
             (report) => report.reportDate === date
           )._id;
           return {
-            start: dayjs(date).toDate(),
-            end: dayjs(date).toDate(),
+            start: dayjs(dayjs(date).toDate()).format(
+              "ddd, MMM D YYYY HH:mm:ss"
+            ),
+            end: dayjs(dayjs(date).toDate()).format("ddd, MMM D YYYY HH:mm:ss"),
             link: [
               "WORKING DAY",
               "CAMP DAY",
@@ -167,8 +169,10 @@ const getAttendance = asyncHandler(async (req, res) => {
           };
         } else if (attendanceObj && attendanceObj.title === "WEEK OFF") {
           return {
-            start: dayjs(date).toDate(),
-            end: dayjs(date).toDate(),
+            start: dayjs(dayjs(date).toDate()).format(
+              "ddd, MMM D YYYY HH:mm:ss"
+            ),
+            end: dayjs(dayjs(date).toDate()).format("ddd, MMM D YYYY HH:mm:ss"),
             link: null,
             startDate: date,
             endDate: date,
@@ -179,8 +183,10 @@ const getAttendance = asyncHandler(async (req, res) => {
           };
         } else if (attendanceObj && attendanceObj.title === "ABSENT") {
           return {
-            start: dayjs(date).toDate(),
-            end: dayjs(date).toDate(),
+            start: dayjs(dayjs(date).toDate()).format(
+              "ddd, MMM D YYYY HH:mm:ss"
+            ),
+            end: dayjs(dayjs(date).toDate()).format("ddd, MMM D YYYY HH:mm:ss"),
             link: null,
             startDate: date,
             endDate: date,
@@ -191,8 +197,10 @@ const getAttendance = asyncHandler(async (req, res) => {
           };
         } else if (leaveSet.has(date)) {
           return {
-            start: dayjs(date).toDate(),
-            end: dayjs(date).toDate(),
+            start: dayjs(dayjs(date).toDate()).format(
+              "ddd, MMM D YYYY HH:mm:ss"
+            ),
+            end: dayjs(dayjs(date).toDate()).format("ddd, MMM D YYYY HH:mm:ss"),
             link: null,
             startDate: date,
             endDate: date,
@@ -203,8 +211,10 @@ const getAttendance = asyncHandler(async (req, res) => {
           };
         } else if (holidayTitle) {
           return {
-            start: dayjs(date).toDate(),
-            end: dayjs(date).toDate(),
+            start: dayjs(dayjs(date).toDate()).format(
+              "ddd, MMM D YYYY HH:mm:ss"
+            ),
+            end: dayjs(dayjs(date).toDate()).format("ddd, MMM D YYYY HH:mm:ss"),
             link: null,
             startDate: date,
             endDate: date,
