@@ -1019,7 +1019,7 @@ const deleteCSReport = asyncHandler(async (req, res) => {
 
 //--- This API is for 'DOCTOR's [DR]' reports completion for a particular User. --->
 const completeDoctorReportCall = asyncHandler(async (req, res) => {
-  const { _id: userId, name } = req.user;
+  const { _id: userId, name, role } = req.user;
   const { reportId, imageUrl, location } = req.body;
 
   if (imageUrl == undefined || imageUrl == null) imageUrl = "";
@@ -1029,10 +1029,8 @@ const completeDoctorReportCall = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant doctor report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "doctorReports._id": reportId },
-        { "doctorReports._id": reportId },
-      ],
+      createdBy: userId,
+      "doctorReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -1048,7 +1046,7 @@ const completeDoctorReportCall = asyncHandler(async (req, res) => {
     }
 
     const doctorReport = existingReport.doctorReports.find(
-      (r) => r._id.toString() === reportId
+      (r) => r._id.toString() === reportId.toString()
     );
 
     if (!doctorReport) {
@@ -1061,6 +1059,47 @@ const completeDoctorReportCall = asyncHandler(async (req, res) => {
             `No doctor report found with Report ID: ${reportId}.`
           )
         );
+    }
+
+    if (
+      doctorReport.workWithEmployeeId.toString() !== userId.toString() &&
+      role !== "TBM"
+    ) {
+      // Check if the parent has the report with the same doctor report ID
+      const parentReport = await DCR.findOne({
+        createdBy: doctorReport.workWithEmployeeId,
+        "doctorReports._id": reportId,
+      });
+
+      if (!parentReport) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `No doctor report not found in your up line as you are working with ${doctorReport.workWithEmployeeRole}.`
+            )
+          );
+      }
+
+      const parentDoctorReport = parentReport.doctorReports.find(
+        (r) => r._id.toString() === reportId.toString()
+      );
+
+      if (
+        ["INCOMPLETE CALL", "PENDING"].includes(parentDoctorReport.reportStatus)
+      ) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `You can't complete this report as the person working with you has his report status : ${parentDoctorReport.reportStatus}.`
+            )
+          );
+      }
     }
 
     await updateDvlDoctorLocation(doctorReport.doctor, location);
@@ -1176,7 +1215,7 @@ const completeCSReportCall = asyncHandler(async (req, res) => {
 
 //--- This API is for 'DOCTOR's [DR]' reports incompletion for a particular User. --->
 const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
-  const { _id: userId, name } = req.user;
+  const { _id: userId, name, role } = req.user;
   const { reportId, remarks } = req.body;
 
   if (!validateFields(req.body, ["reportId", "remarks"], res)) return;
@@ -1184,10 +1223,8 @@ const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant doctor report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "doctorReports._id": reportId },
-        { "doctorReports._id": reportId },
-      ],
+      createdBy: userId,
+      "doctorReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -1216,6 +1253,47 @@ const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
             `No doctor report found with Report ID: ${reportId}.`
           )
         );
+    }
+
+    if (
+      doctorReport.workWithEmployeeId.toString() !== userId.toString() &&
+      role !== "TBM"
+    ) {
+      // Check if the parent has the report with the same doctor report ID
+      const parentReport = await DCR.findOne({
+        createdBy: doctorReport.workWithEmployeeId,
+        "doctorReports._id": reportId,
+      });
+
+      if (!parentReport) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `No doctor report not found in your up line as you are working with ${doctorReport.workWithEmployeeRole}.`
+            )
+          );
+      }
+
+      const parentDoctorReport = parentReport.doctorReports.find(
+        (r) => r._id.toString() === reportId.toString()
+      );
+
+      if (
+        ["COMPLETE CALL", "PENDING"].includes(parentDoctorReport.reportStatus)
+      ) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `You can't incomplete this report as the person working with you has his report status : ${parentDoctorReport.reportStatus}.`
+            )
+          );
+      }
     }
 
     await DCR.updateOne(
@@ -1439,7 +1517,19 @@ const deleteAnyDCRReport = asyncHandler(async (req, res) => {
         );
     }
 
-    if (dcrReport.createdBy.toString() !== userId) {
+    if (dcrReport.doctorReports.length > 0 || dcrReport.csReports.length > 0) {
+      return res
+        .status(400)
+        .json(
+          new ApiRes(
+            400,
+            null,
+            `Sorry, ${name}, You can't delete this report, because it has ${dcrReport.doctorReports.length} doctor reports and ${dcrReport.csReports.length} Chemist/Stockist reports.`
+          )
+        );
+    }
+
+    if (dcrReport.createdBy.toString() !== userId.toString()) {
       return res
         .status(403)
         .json(
@@ -1822,10 +1912,10 @@ const getDCRAttendantReportsOfAnyYearsMonth = asyncHandler(async (req, res) => {
 //---GET MONTHLY DCR REPORT STATS API'S --->
 const getMonthlyDCRReportStats = asyncHandler(async (req, res) => {
   const { name } = req.user;
-  const { _id: userId, year, month } = req.body;
+  const { _id: userId, year, month } = req.query;
 
   // Validate required fields
-  if (!validateFields(req.body, ["_id", "year", "month"], res)) return;
+  if (!validateFields(req.query, ["_id", "year", "month"], res)) return;
 
   try {
     const startOfMonth = `${year}-${month}-01`;

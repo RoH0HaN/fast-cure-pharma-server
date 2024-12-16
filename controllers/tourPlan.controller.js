@@ -318,7 +318,7 @@ const getTourPlan = asyncHandler(async (req, res) => {
         isApproved: item.isApproved || false,
         changedArea: changedArea,
         reportId: reportId,
-        isReportExists: Boolean(reportId),
+        isReportExists: reportId ? true : false,
       };
     });
 
