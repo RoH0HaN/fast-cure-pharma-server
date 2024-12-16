@@ -1136,7 +1136,7 @@ const completeDoctorReportCall = asyncHandler(async (req, res) => {
 
 //--- This API is for 'CHEMIST/STOCKIST's [CS]' reports completion for a particular User. --->
 const completeCSReportCall = asyncHandler(async (req, res) => {
-  const { _id: userId, name } = req.user;
+  const { _id: userId, name, role } = req.user;
   const { reportId, imageUrl, location } = req.body;
 
   if (imageUrl == undefined || imageUrl == null) imageUrl = "";
@@ -1146,10 +1146,8 @@ const completeCSReportCall = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant doctor report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "csReports._id": reportId },
-        { "csReports._id": reportId },
-      ],
+      createdBy: userId,
+      "csReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -1165,7 +1163,7 @@ const completeCSReportCall = asyncHandler(async (req, res) => {
     }
 
     const csReport = existingReport.csReports.find(
-      (r) => r._id.toString() === reportId
+      (r) => r._id.toString() === reportId.toString()
     );
 
     if (!csReport) {
@@ -1175,9 +1173,50 @@ const completeCSReportCall = asyncHandler(async (req, res) => {
           new ApiRes(
             404,
             null,
-            `No doctor report found with Report ID: ${reportId}.`
+            `No Chemist/Stockist report found with Report ID: ${reportId}.`
           )
         );
+    }
+
+    if (
+      csReport.workWithEmployeeId.toString() !== userId.toString() &&
+      role !== "TBM"
+    ) {
+      // Check if the parent has the report with the same doctor report ID
+      const parentReport = await DCR.findOne({
+        createdBy: csReport.workWithEmployeeId,
+        "csReports._id": reportId,
+      });
+
+      if (!parentReport) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `No Chemist/Stockist report not found in your up line as you are working with ${csReport.workWithEmployeeRole}.`
+            )
+          );
+      }
+
+      const parentCsReport = parentReport.csReports.find(
+        (r) => r._id.toString() === reportId.toString()
+      );
+
+      if (
+        ["INCOMPLETE CALL", "PENDING"].includes(parentCsReport.reportStatus)
+      ) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `You can't complete this report as the person working with you has his report status : ${parentCsReport.reportStatus}.`
+            )
+          );
+      }
     }
 
     await DCR.updateOne(
@@ -1240,7 +1279,7 @@ const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
     }
 
     const doctorReport = existingReport.doctorReports.find(
-      (r) => r._id.toString() === reportId
+      (r) => r._id.toString() === reportId.toString()
     );
 
     if (!doctorReport) {
@@ -1335,10 +1374,8 @@ const incompleteCSReportCall = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant doctor report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "csReports._id": reportId },
-        { "csReports._id": reportId },
-      ],
+      createdBy: userId,
+      "csReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -1354,7 +1391,7 @@ const incompleteCSReportCall = asyncHandler(async (req, res) => {
     }
 
     const csReport = existingReport.csReports.find(
-      (r) => r._id.toString() === reportId
+      (r) => r._id.toString() === reportId.toString()
     );
 
     if (!csReport) {
@@ -1364,9 +1401,48 @@ const incompleteCSReportCall = asyncHandler(async (req, res) => {
           new ApiRes(
             404,
             null,
-            `No doctor report found with Report ID: ${reportId}.`
+            `No Chemist/Stockist report found with Report ID: ${reportId}.`
           )
         );
+    }
+
+    if (
+      csReport.workWithEmployeeId.toString() !== userId.toString() &&
+      role !== "TBM"
+    ) {
+      // Check if the parent has the report with the same doctor report ID
+      const parentReport = await DCR.findOne({
+        createdBy: csReport.workWithEmployeeId,
+        "csReports._id": reportId,
+      });
+
+      if (!parentReport) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `No Chemist/Stockist report not found in your up line as you are working with ${csReport.workWithEmployeeRole}.`
+            )
+          );
+      }
+
+      const parentCsReport = parentReport.csReports.find(
+        (r) => r._id.toString() === reportId.toString()
+      );
+
+      if (["COMPLETE CALL", "PENDING"].includes(parentCsReport.reportStatus)) {
+        return res
+          .status(400)
+          .json(
+            new ApiRes(
+              400,
+              null,
+              `You can't incomplete this report as the person working with you has his report status : ${parentCsReport.reportStatus}.`
+            )
+          );
+      }
     }
 
     await DCR.updateOne(
