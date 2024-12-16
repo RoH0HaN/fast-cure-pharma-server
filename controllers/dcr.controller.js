@@ -6,6 +6,8 @@ import {
   getTotalTravelingDistanceFromDCRReport,
   markAttendance,
   checkForWeekOffAndLeave,
+  getAllLocationsOfSingleDCRReport,
+  checkAndUpdatePrivilegedLeave,
 } from "../util/helpers/dcr.helpers.js";
 import { uploadImageToFirebase } from "../util/upload.images.firebase.js";
 import { getDatesBetween } from "../util/helpers/leave.helpers.js";
@@ -824,10 +826,8 @@ const deleteDoctorReport = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant doctor report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "doctorReports._id": reportId },
-        { "doctorReports._id": reportId },
-      ],
+      createdBy: userId,
+      "doctorReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -859,7 +859,7 @@ const deleteDoctorReport = asyncHandler(async (req, res) => {
     }
 
     // Check if the current user is associated with the doctor report
-    if (doctorReport.workWithEmployeeId.toString() !== userId) {
+    if (doctorReport.workWithEmployeeId.toString() !== userId.toString()) {
       // Check if the parent has the report with the same doctor report ID
       const parentReport = await DCR.findOne({
         createdBy: doctorReport.workWithEmployeeId,
@@ -926,10 +926,8 @@ const deleteCSReport = asyncHandler(async (req, res) => {
   try {
     // Fetch the report and relevant CS report in a single query
     const existingReport = await DCR.findOne({
-      $or: [
-        { createdBy: userId, "csReports._id": reportId },
-        { "csReports._id": reportId },
-      ],
+      createdBy: userId,
+      "csReports._id": reportId,
     }).lean();
 
     if (!existingReport) {
@@ -961,7 +959,7 @@ const deleteCSReport = asyncHandler(async (req, res) => {
     }
 
     // Check if the current user is associated with the doctor report
-    if (csReport.workWithEmployeeId.toString() !== userId) {
+    if (csReport.workWithEmployeeId.toString() !== userId.toString()) {
       // Check if the parent has the report with the same doctor report ID
       const parentReport = await DCR.findOne({
         createdBy: csReport.workWithEmployeeId,
@@ -1549,6 +1547,9 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
     }
 
     await dcrReport.save();
+
+    // Check that total 15 reports is completed or not to increase PL COUNT by 1
+    await checkAndUpdatePrivilegedLeave(userId);
 
     return res
       .status(200)
@@ -2259,6 +2260,36 @@ const getCurrentDCRReportStatuses = asyncHandler(async (req, res) => {
   }
 });
 
+//---GET ROUTE OF ANY DCR REPORT --->
+const getRouteOfAnyDCRReport = asyncHandler(async (req, res) => {
+  const { empId, date } = req.query;
+
+  if (!validateFields(req.query, ["empId", "date"], res)) return;
+
+  try {
+    const dcrReport = await DCR.findOne({ createdBy: empId, reportDate: date });
+
+    if (!dcrReport) {
+      return res
+        .status(404)
+        .json(
+          new ApiRes(404, null, `DCR Report of ${empId} on ${date} not found.`)
+        );
+    }
+
+    const listOfLocations = await getAllLocationsOfSingleDCRReport(
+      dcrReport._id
+    );
+
+    return res.status(200).json(new ApiRes(200, listOfLocations, ""));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal server error."));
+  }
+});
+
 //---IMAGE UPLOAD API ONLY FOR ANDROID --->
 const uploadCompleteCallPhoto = asyncHandler(async (req, res) => {
   const { name } = req.user;
@@ -2311,5 +2342,6 @@ export {
   getMonthlyDCRReportStats,
   getFullDCRReport,
   getCurrentDCRReportStatuses,
+  getRouteOfAnyDCRReport,
   uploadCompleteCallPhoto,
 };

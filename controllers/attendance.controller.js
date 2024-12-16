@@ -8,6 +8,7 @@ import { Logger } from "../util/logger.js";
 import dayjs from "dayjs";
 import isSameOrBefore from "dayjs/plugin/isSameOrBefore.js";
 import isSameOrAfter from "dayjs/plugin/isSameOrAfter.js";
+import { DCR } from "../models/dcr.models.js";
 dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
@@ -120,6 +121,11 @@ const getAttendance = asyncHandler(async (req, res) => {
         })
     );
 
+    const dcrReports = await DCR.find({
+      createdBy: _id,
+      reportDate: { $gte: `${year}-${month}-01`, $lte: `${year}-${month}-31` },
+    });
+
     const attendanceData = attendance?.attendance?.[year]?.[month] || {};
     const resultList = monthlyDates
       .map((date) => {
@@ -127,6 +133,9 @@ const getAttendance = asyncHandler(async (req, res) => {
         const attendanceObj = attendanceData[date];
 
         if (attendanceObj && attendanceObj.title !== "WEEK OFF") {
+          const reportId = dcrReports.find(
+            (report) => report.reportDate === date
+          )._id;
           return {
             start: dayjs(date).toDate(),
             end: dayjs(date).toDate(),
@@ -138,12 +147,21 @@ const getAttendance = asyncHandler(async (req, res) => {
               "TRAINING DAY",
               "ADMIN DAY",
             ].includes(attendanceObj.title)
-              ? `/report/#reportId`
+              ? `/report/${reportId}`
               : null,
             startDate: date,
             endDate: date,
             title: attendanceObj.title,
-            reportId: "#reportId",
+            reportId: [
+              "WORKING DAY",
+              "CAMP DAY",
+              "MEETING DAY",
+              "JOINING DAY",
+              "TRAINING DAY",
+              "ADMIN DAY",
+            ].includes(attendanceObj.title)
+              ? reportId
+              : null,
             isHoliday: !!holidayTitle,
             holiday: holidayTitle || null,
           };

@@ -351,6 +351,92 @@ const checkForWeekOffAndLeave = async (empId) => {
   }
 };
 
+const getAllLocationsOfSingleDCRReport = async (dcrReportId) => {
+  try {
+    const dcrReport = await DCR.findById(dcrReportId); // Ensure this is asynchronous if necessary
+
+    if (
+      dcrReport.reportStatus === "PENDING" ||
+      dcrReport.reportStatus === "INCOMPLETE"
+    ) {
+      return [];
+    }
+    let allLocationsInOrder = [dcrReport.startLocation];
+
+    // Sort doctor reports based on completedAt and map to locations
+    if (dcrReport.doctorReports.length > 0) {
+      const doctorReportLocations = dcrReport.doctorReports
+        .filter(
+          (report) =>
+            report.completedAt && report.reportStatus === "COMPLETE CALL"
+        ) // Filter out reports with null/undefined completedAt
+        .sort((a, b) => new Date(a.completedAt) - new Date(b.completedAt)) // Sort by completedAt (earliest first)
+        .map((report) => report.location);
+
+      // Concatenate all the locations in order
+      allLocationsInOrder = allLocationsInOrder.concat(doctorReportLocations);
+    }
+
+    // Add the end location at the end
+    allLocationsInOrder.push(dcrReport.endLocation);
+
+    return allLocationsInOrder;
+  } catch (error) {
+    Logger(`Error filtering locations: ${error.message}`, "error");
+    throw new Error("Failed to filter locations.");
+  }
+};
+
+const checkAndUpdatePrivilegedLeave = async (empId) => {
+  try {
+    const today = dayjs().format("YYYY-MM-DD");
+
+    // Fetch leave record concurrently
+    const leaveRecord = await Leave.findOne({ empId }).lean();
+
+    const duration = dayjs(today).diff(dayjs(leaveRecord.updatedOn), "day") + 1;
+
+    if (duration < 15) {
+      return false;
+    }
+
+    const dcrReports = await DCR.find({
+      createdBy: empId,
+      reportStatus: "COMPLETE",
+      reportDate: { $gte: leaveRecord.updatedOn, $lte: today },
+    });
+
+    if (
+      dcrReports.length == 0 ||
+      dcrReports.length == null ||
+      dcrReports.length < 15
+    ) {
+      return false;
+    }
+
+    await Leave.findOneAndUpdate(
+      { empId },
+      {
+        $set: {
+          plCount: leaveRecord.plCount + 1,
+          updatedOn: today,
+        },
+      },
+      { new: true }
+    );
+
+    Logger(
+      `Privileged leave count for ${empId} has been updated to ${leaveRecord.plCount + 1}.`,
+      "info"
+    );
+
+    return true;
+  } catch (error) {
+    Logger(error, "error");
+    throw new Error("Failed to check and update privileged leave.");
+  }
+};
+
 export {
   getPlaceNameFromLocation,
   getWorkWithEmployeeId,
@@ -359,4 +445,6 @@ export {
   getTotalTravelingDistanceFromDCRReport,
   markAttendance,
   checkForWeekOffAndLeave,
+  getAllLocationsOfSingleDCRReport,
+  checkAndUpdatePrivilegedLeave,
 };

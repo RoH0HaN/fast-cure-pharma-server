@@ -16,7 +16,7 @@ const dvlSchema = new Schema({
   prodFour: { type: String, default: "N/A", uppercase: true },
   remarks: { type: String, default: "N/A", uppercase: true },
   freqVisit: { type: String, default: "N/A", uppercase: true },
-  status: { type: String, default: "Pending", uppercase: true },
+  status: { type: String, default: "PENDING", uppercase: true },
   addedBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   approvedBy: { type: Schema.Types.ObjectId, ref: "User", required: false },
   dataToBeUpdated: { type: Object, default: {} },

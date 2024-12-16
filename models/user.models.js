@@ -205,4 +205,18 @@ const Manager = User.discriminator(
 
 const Employee = User.discriminator("Employee", new Schema(commonDetails));
 
-export { User, Manager, Employee };
+//--- USER NOTICES SCHEMA ---
+const noticeSchema = new Schema(
+  {
+    notice: {
+      type: String,
+      required: true,
+      uppercase: true,
+    },
+  },
+  { timestamps: true }
+);
+
+const Notice = model("Notice", noticeSchema);
+
+export { User, Manager, Employee, Notice };

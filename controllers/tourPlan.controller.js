@@ -36,7 +36,7 @@ const create = asyncHandler(async (req, res) => {
         (role === "TBM" && todayDate >= 20 && todayDate <= 25) ||
         (role !== "TBM" && todayDate >= 20 && todayDate <= 27);
 
-      if (!createAllowed && !existingTourPlan.isExtraDayForCreate) {
+      if (!createAllowed && !existingTourPlan.isExtraDayForCreated) {
         return res
           .status(300) // used in android app for warning
           .json(
@@ -85,8 +85,8 @@ const create = asyncHandler(async (req, res) => {
     tourPlans[year][month] = tourPlan;
 
     existingTourPlan.tourPlan = new Map(Object.entries(tourPlans));
-    existingTourPlan.isExtraDayForCreate = false;
-    existingTourPlan.isExtraDayForUpdate = false;
+    existingTourPlan.isExtraDayForCreated = false;
+    existingTourPlan.isExtraDayForApproved = false;
 
     await existingTourPlan.save();
 
@@ -132,14 +132,14 @@ const update = asyncHandler(async (req, res) => {
       (role === "TBM" && todayDate >= 20 && todayDate <= 25) ||
       (role !== "TBM" && todayDate >= 20 && todayDate <= 27);
 
-    if (!createAllowed && !existingTourPlan.isExtraDayForCreate) {
+    if (!createAllowed && !existingTourPlan.isExtraDayForCreated) {
       return res
         .status(300) // used in android app for warning
         .json(
           new ApiRes(
             300,
             null,
-            `${name}, You can create tour plans only between 20th and 25th of every month. Please contact ADMIN for more information.`
+            `${name}, You can update tour plans only between 20th and 25th of every month. Please contact ADMIN for more information.`
           )
         );
     }
@@ -181,7 +181,7 @@ const update = asyncHandler(async (req, res) => {
       {
         $set: {
           [`tourPlan.${year}.${month}`]: updatedTourPlanList,
-          isExtraDayForCreate: false,
+          isExtraDayForCreated: false,
         },
       }
     );
@@ -328,8 +328,8 @@ const getTourPlan = asyncHandler(async (req, res) => {
         {
           empId: _id,
           tourPlan: modifiedTourPlan,
-          isExtraDayForCreate: tourPlan.isExtraDayForCreate,
-          isExtraDayForApprove: tourPlan.isExtraDayForApprove,
+          isExtraDayForCreated: tourPlan.isExtraDayForCreated,
+          isExtraDayForApproved: tourPlan.isExtraDayForApproved,
         },
         "Tour plan found."
       )
@@ -422,7 +422,7 @@ const approveTourPlanDates = asyncHandler(async (req, res) => {
     //Check approval date constraints for non-admin users
     if (
       role !== "ADMIN" &&
-      !existingTourPlan.isExtraDayForApprove &&
+      !existingTourPlan.isExtraDayForApproved &&
       (todayDate < 20 || todayDate > 27)
     ) {
       return res
@@ -460,7 +460,7 @@ const approveTourPlanDates = asyncHandler(async (req, res) => {
             update: {
               $set: {
                 [`tourPlan.${year}.${month}.$.isApproved`]: true,
-                isExtraDayForApprove: false,
+                isExtraDayForApproved: false,
               },
             },
           });
@@ -505,7 +505,7 @@ const allowExtraDay = asyncHandler(async (req, res) => {
 
   try {
     const updateField =
-      type === "create" ? "isExtraDayForCreate" : "isExtraDayForApprove";
+      type === "create" ? "isExtraDayForCreatedd" : "isExtraDayForApproved";
 
     // Upsert the document: Create if not exists, update if exists
     const result = await TourPlan.findOneAndUpdate(

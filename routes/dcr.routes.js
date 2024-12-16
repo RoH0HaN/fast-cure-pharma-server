@@ -23,6 +23,7 @@ import {
   getMonthlyDCRReportStats,
   getFullDCRReport,
   getCurrentDCRReportStatuses,
+  getRouteOfAnyDCRReport,
   uploadCompleteCallPhoto,
 } from "../controllers/dcr.controller.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -109,6 +110,11 @@ router
   .route("/get-current-dcr-report-statuses")
   .get(verifyJWT, getCurrentDCRReportStatuses);
 //---CURRENT DCR REPORT API'S --->
+
+//---GET ROUTE OF ANY DCR REPORT --->
+router
+  .route("/get-route-of-any-dcr-report")
+  .get(verifyJWT, getRouteOfAnyDCRReport);
 
 //--- IMAGE UPLOAD API ONLY FOR ANDROID --->
 router

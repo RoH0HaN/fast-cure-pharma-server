@@ -27,6 +27,7 @@ import tourPlanRoutes from "../routes/tourPlan.routes.js";
 import attendanceRoutes from "../routes/attendance.routes.js";
 import leaveRoutes from "../routes/leave.routes.js";
 import dcrRoutes from "../routes/dcr.routes.js";
+import automationRoutes from "../routes/automation.routes.js";
 
 // Routes
 const apiV1 = "/api/v1";
@@ -41,5 +42,6 @@ app.use(`${apiV1}/tour-plans`, tourPlanRoutes);
 app.use(`${apiV1}/attendances`, attendanceRoutes);
 app.use(`${apiV1}/leaves`, leaveRoutes);
 app.use(`${apiV1}/dcrs`, dcrRoutes);
+app.use(`${apiV1}/automations`, automationRoutes);
 
 export { app };

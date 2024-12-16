@@ -8,9 +8,14 @@ import {
   initializeTourPlanDocument,
 } from "../util/helpers/user.helpers.js";
 import { ApiRes, validateFields } from "../util/api.response.js";
-import { User, Employee, Manager } from "../models/user.models.js";
+import { User, Employee, Manager, Notice } from "../models/user.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import { Logger } from "../util/logger.js";
+import { TourPlan } from "../models/tourPlan.models.js";
+import { DVL } from "../models/dvl.models.js";
+import { DCR } from "../models/dcr.models.js";
+import dayjs from "dayjs";
+import { Leave } from "../models/leave.models.js";
 
 const create = asyncHandler(async (req, res) => {
   const {
@@ -684,6 +689,147 @@ const getDownlineEmployees = asyncHandler(async (req, res) => {
   }
 });
 
+//--- GET USER DASHBOARD COUNTS --->
+const getUserDashboardCounts = asyncHandler(async (req, res) => {
+  const { _id: userId, role } = req.user;
+
+  try {
+    // Adjust year and month based on today's date
+    let currentDate = dayjs();
+    if (currentDate.date() > 20) {
+      currentDate = currentDate.add(1, "month");
+    }
+    const [year, month] = currentDate.format("YYYY-MM").split("-");
+
+    const employee = await User.findById(userId);
+
+    const isAdmin = role === "ADMIN";
+    const pendingDcrQuery = isAdmin
+      ? { reportStatus: "PENDING" }
+      : { createdBy: employee._id, reportStatus: "PENDING" };
+
+    const pendingDvlQuery = isAdmin
+      ? { status: "PENDING" }
+      : { addedBy: { $in: employee.downLineEmployees }, status: "PENDING" };
+
+    const pendingLeaveQuery = isAdmin
+      ? { "leaves.status": "PENDING" }
+      : { empId: employee._id, "leaves.status": "PENDING" };
+
+    const pendingDcrReportsPromise = DCR.find(pendingDcrQuery);
+    const pendingDvlsPromise = DVL.find(pendingDvlQuery);
+    const pendingLeavesPromise = Leave.find(pendingLeaveQuery);
+    const tourPlansPromise = TourPlan.find(
+      isAdmin ? {} : { empId: employee._id }
+    ).lean();
+
+    // Concurrently fetch all required data
+    const [pendingDcrReports, pendingDvls, pendingLeaves, tourPlans] =
+      await Promise.all([
+        pendingDcrReportsPromise,
+        pendingDvlsPromise,
+        pendingLeavesPromise,
+        tourPlansPromise,
+      ]);
+
+    // Safely calculate pending tour plans
+    const pendingTourPlans =
+      tourPlans.filter((plan) => {
+        if (
+          !plan.tourPlan ||
+          !plan.tourPlan[year] ||
+          !plan.tourPlan[year][month]
+        ) {
+          return true; // Missing tour plan for this year/month
+        }
+        return false; // Tour plan exists
+      }).length || 0;
+
+    return res.status(200).json(
+      new ApiRes(
+        200,
+        {
+          dcrCount: pendingDcrReports.length,
+          dvlCount: pendingDvls.length,
+          leaveCount: pendingLeaves.length,
+          pendingPlanCount: pendingTourPlans,
+        },
+        ""
+      )
+    );
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
+//--- NOTICES SECTION API's --->
+const createNotice = asyncHandler(async (req, res) => {
+  const { notice } = req.body;
+
+  if (!notice) {
+    return res.status(400).json(new ApiRes(400, null, "Notice is required"));
+  }
+
+  try {
+    const newNotice = await Notice.create({
+      notice,
+    });
+
+    if (!newNotice) {
+      return res
+        .status(400)
+        .json(new ApiRes(400, null, "Failed to create notice"));
+    }
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, "Notice created successfully."));
+  } catch (error) {
+    return res.status(500).json(new ApiRes(500, null, error.message));
+  }
+});
+
+const getNotices = asyncHandler(async (req, res) => {
+  try {
+    const notices = await Notice.find({}).sort({ createdAt: -1 });
+
+    return res
+      .status(200)
+      .json(
+        new ApiRes(200, notices ? notices : [], "Notices fetched successfully.")
+      );
+  } catch (error) {
+    return res.status(500).json(new ApiRes(500, null, error.message));
+  }
+});
+
+const deleteNotice = asyncHandler(async (req, res) => {
+  const _id = req.params._id;
+
+  if (!_id) {
+    return res.status(400).json(new ApiRes(400, null, "Notice id is required"));
+  }
+  try {
+    const deletedNotice = await Notice.findByIdAndDelete(id);
+
+    if (!deletedNotice) {
+      return res
+        .status(404)
+        .json(new ApiRes(404, null, "Notice not found with this id"));
+    }
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, "Notice deleted successfully."));
+  } catch (error) {
+    return res.status(500).json(new ApiRes(500, null, error.message));
+  }
+});
+//--- NOTICES SECTION API's --->
+
 // API's specific for Web App --->
 const getEmployeesDataForTable = asyncHandler(async (req, res) => {
   try {
@@ -761,6 +907,12 @@ export {
   view,
   archive,
   getEmployeesIdAndNameBasedOnRole,
+  getUserDashboardCounts,
+  //--- NOTICES SECTION API's --->
+  createNotice,
+  getNotices,
+  deleteNotice,
+  //--- NOTICES SECTION API's --->
   getDownlineEmployees,
   getEmployeesDataForTable,
 };
