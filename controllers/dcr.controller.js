@@ -1366,7 +1366,7 @@ const incompleteDoctorReportCall = asyncHandler(async (req, res) => {
 
 //--- This API is for 'CHEMIST/STOCKIST's [CS]' reports incompletion for a particular User. --->
 const incompleteCSReportCall = asyncHandler(async (req, res) => {
-  const { _id: userId, name } = req.user;
+  const { _id: userId, name, role } = req.user;
   const { reportId, remarks } = req.body;
 
   if (!validateFields(req.body, ["reportId", "remarks"], res)) return;
