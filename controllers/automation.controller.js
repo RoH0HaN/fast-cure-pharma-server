@@ -3,6 +3,7 @@ import { ApiRes } from "../util/api.response.js";
 import { User } from "../models/user.models.js";
 import { Leave } from "../models/leave.models.js";
 import { Attendance } from "../models/attendance.models.js";
+import { TourPlan } from "../models/tourPlan.models.js";
 import { DCR } from "../models/dcr.models.js";
 import { asyncHandler } from "../util/async.handler.js";
 import dayjs from "dayjs";
@@ -123,4 +124,32 @@ const automateResetLeaves = asyncHandler(async (req, res) => {
   }
 });
 
-export { automateResetLeaves, automateEmployeeLeaveAttendanceAndReport };
+const automateResetTourPlanCreateAndApprove = asyncHandler(async (req, res) => {
+  try {
+    // Update all tour plans in a single bulk operation
+    await TourPlan.updateMany(
+      {}, // No condition, update all documents
+      {
+        $set: {
+          isExtraDayForCreated: false,
+          isExtraDayForApproved: false,
+        },
+      }
+    );
+
+    return res
+      .status(200)
+      .json(new ApiRes(200, null, "All tour plans reset successfully."));
+  } catch (error) {
+    Logger(error, "error");
+    return res
+      .status(500)
+      .json(new ApiRes(500, null, error.message || "Internal Server Error."));
+  }
+});
+
+export {
+  automateResetLeaves,
+  automateEmployeeLeaveAttendanceAndReport,
+  automateResetTourPlanCreateAndApprove,
+};

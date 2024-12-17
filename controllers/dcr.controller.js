@@ -314,6 +314,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
           area,
           workWithEmployeeRole: role,
           workWithEmployeeId: _id,
+          workWithEmployeeName: name,
         },
       });
 
@@ -332,6 +333,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
         area,
         workWithEmployeeRole: workWithDetails.parentRole,
         workWithEmployeeId: workWithDetails.parentId,
+        workWithEmployeeName: workWithDetails.parentName,
       },
     });
 
@@ -496,6 +498,7 @@ const addDoctorReport = asyncHandler(async (req, res) => {
               ...doctorReport,
               workWithEmployeeRole: role,
               workWithEmployeeId: _id,
+              workWithEmployeeName: name,
             },
           },
         },
@@ -559,6 +562,7 @@ const addDoctorReport = asyncHandler(async (req, res) => {
             ...doctorReport,
             workWithEmployeeRole: workWithDetails.parentRole,
             workWithEmployeeId: workWithDetails.parentId,
+            workWithEmployeeName: workWithDetails.parentName,
           },
         },
       },
@@ -583,6 +587,7 @@ const addDoctorReport = asyncHandler(async (req, res) => {
                 ...doctorReport,
                 workWithEmployeeRole: role,
                 workWithEmployeeId: _id,
+                workWithEmployeeName: name,
               },
             },
           },
@@ -604,6 +609,7 @@ const addDoctorReport = asyncHandler(async (req, res) => {
               ...doctorReport,
               workWithEmployeeRole: role,
               workWithEmployeeId: _id,
+              workWithEmployeeName: name,
             },
           ],
         });
@@ -675,6 +681,7 @@ const addCSReport = asyncHandler(async (req, res) => {
               ...csReport,
               workWithEmployeeRole: role,
               workWithEmployeeId: _id,
+              workWithEmployeeName: name,
             },
           },
         },
@@ -738,6 +745,7 @@ const addCSReport = asyncHandler(async (req, res) => {
             ...csReport,
             workWithEmployeeRole: workWithDetails.parentRole,
             workWithEmployeeId: workWithDetails.parentId,
+            workWithEmployeeName: workWithDetails.parentName,
           },
         },
       },
@@ -762,6 +770,7 @@ const addCSReport = asyncHandler(async (req, res) => {
                 ...csReport,
                 workWithEmployeeRole: role,
                 workWithEmployeeId: _id,
+                workWithEmployeeName: name,
               },
             },
           },
@@ -783,6 +792,7 @@ const addCSReport = asyncHandler(async (req, res) => {
                 ...csReport,
                 workWithEmployeeRole: role,
                 workWithEmployeeId: _id,
+                workWithEmployeeName: name,
               },
             ],
           })
@@ -1688,6 +1698,11 @@ const getAvailableWeekOffDays = asyncHandler(async (req, res) => {
   try {
     const [year, month] = dayjs().format("YYYY-MM").split("-");
 
+    const today = dayjs().format("YYYY-MM-DD");
+
+    // Get the date 7 days ago
+    const last7Days = dayjs().subtract(7, "day").format("YYYY-MM-DD");
+
     // Optimized query: Fetch attendance and DCR reports in one go
     const [existingAttendance, currentMonthDCRReports] = await Promise.all([
       Attendance.findOne({ empId: userId }),
@@ -1696,11 +1711,23 @@ const getAvailableWeekOffDays = asyncHandler(async (req, res) => {
         reportStatus: "COMPLETE",
         isHoliday: true,
         reportDate: {
-          $gte: `${year}-${month}-01`,
-          $lt: `${year}-${month}-31`,
+          $gte: last7Days,
+          $lt: today,
         },
       }),
     ]);
+
+    if (!currentMonthDCRReports || currentMonthDCRReports.length === 0) {
+      return res
+        .status(300)
+        .json(
+          new ApiRes(
+            300,
+            null,
+            `Sorry, ${name}, You haven't work on holidays in last 7 days.`
+          )
+        );
+    }
 
     // Extract used week-off dates from attendance
     const usedWeekOffDates = Object.values(

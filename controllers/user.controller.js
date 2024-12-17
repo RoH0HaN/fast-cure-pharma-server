@@ -6,6 +6,7 @@ import {
   updateAttendanceOfHrOh,
   initializeLeaveDocument,
   initializeTourPlanDocument,
+  initializeAttendanceDocument,
 } from "../util/helpers/user.helpers.js";
 import { ApiRes, validateFields } from "../util/api.response.js";
 import { User, Employee, Manager, Notice } from "../models/user.models.js";
@@ -193,6 +194,7 @@ const create = asyncHandler(async (req, res) => {
     }
     await initializeTourPlanDocument(employee._id);
     await initializeLeaveDocument(employee._id, dateOfJoining);
+    await initializeAttendanceDocument(employee._id);
     return res.status(200).json(new ApiRes(200, null, "User created."));
   } catch (error) {
     Logger(error, "error");
