@@ -149,7 +149,7 @@ const getAttendance = asyncHandler(async (req, res) => {
               "TRAINING DAY",
               "ADMIN DAY",
             ].includes(attendanceObj.title)
-              ? `/report/${reportId}`
+              ? `/dcr/report/${reportId}`
               : null,
             startDate: date,
             endDate: date,
