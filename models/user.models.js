@@ -91,7 +91,6 @@ const commonDetails = {
     parentId: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      default: "",
     },
     parentRole: {
       type: String,

@@ -1,4 +1,5 @@
 import { Logger } from "../util/logger.js";
+import { ApiRes } from "../util/api.response.js";
 import { User } from "../models/user.models.js";
 import { Leave } from "../models/leave.models.js";
 import { Attendance } from "../models/attendance.models.js";
@@ -41,7 +42,7 @@ const automateEmployeeLeaveAttendanceAndReport = asyncHandler(
         );
 
         const yesterdayAttendance =
-          attendance.attendances[year][month][yesterday];
+          attendance.attendances?.[year]?.[month]?.[yesterday];
         const yesterdayLeave = leave?.leaves.some(
           (leave) =>
             dayjs(yesterday).isBetween(

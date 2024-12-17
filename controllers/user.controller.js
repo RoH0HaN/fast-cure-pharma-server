@@ -608,6 +608,7 @@ const archive = asyncHandler(async (req, res) => {
   }
   try {
     const user = await User.findById(_id);
+
     if (!user) {
       return res.status(404).json(new ApiRes(404, null, "User not found."));
     }
@@ -615,6 +616,7 @@ const archive = asyncHandler(async (req, res) => {
     await user.save();
     return res.status(200).json(new ApiRes(200, user, "User archived."));
   } catch (error) {
+    console.log(error);
     Logger(error, "error");
     return res
       .status(500)
@@ -796,11 +798,7 @@ const getNotices = asyncHandler(async (req, res) => {
   try {
     const notices = await Notice.find({}).sort({ createdAt: -1 });
 
-    return res
-      .status(200)
-      .json(
-        new ApiRes(200, notices ? notices : [], "Notices fetched successfully.")
-      );
+    return res.status(200).json(new ApiRes(200, notices ? notices : [], ""));
   } catch (error) {
     return res.status(500).json(new ApiRes(500, null, error.message));
   }
@@ -833,9 +831,11 @@ const deleteNotice = asyncHandler(async (req, res) => {
 // API's specific for Web App --->
 const getEmployeesDataForTable = asyncHandler(async (req, res) => {
   try {
-    let employees = await User.find({ role: { $ne: "ADMIN" } }).select(
-      "_id empId name basicDetails.parentName role password headquarter email isArchived -__t"
-    );
+    let employees = await User.find({ role: { $ne: "ADMIN" } })
+      .select(
+        "_id empId name basicDetails.parentName role password headquarter email isArchived -__t"
+      )
+      .lean();
 
     if (!employees.length) {
       return res.status(200).json(new ApiRes(200, [], `No employees found.`));
@@ -846,7 +846,7 @@ const getEmployeesDataForTable = asyncHandler(async (req, res) => {
         _id: employee._id,
         empId: employee.empId,
         name: employee.name,
-        parentName: employee._doc.basicDetails.parentName,
+        parentName: employee.basicDetails.parentName,
         role: employee.role,
         password: employee.password,
         headquarter: employee.headquarter,
