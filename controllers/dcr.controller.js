@@ -1538,11 +1538,16 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
     dcrReport.totalDistance = totalTravelingDistance;
     dcrReport.reportStatus = "COMPLETE";
 
+    await dcrReport.save();
+
     const attendanceStatus = await markAttendance(
       userId,
       name,
       dcrReport.workStatus
     );
+
+    // Check that total 15 reports is completed or not to increase PL COUNT by 1
+    await checkAndUpdatePrivilegedLeave(userId);
 
     if (!attendanceStatus) {
       return res
@@ -1555,11 +1560,6 @@ const completeAnyDCRReport = asyncHandler(async (req, res) => {
           )
         );
     }
-
-    await dcrReport.save();
-
-    // Check that total 15 reports is completed or not to increase PL COUNT by 1
-    await checkAndUpdatePrivilegedLeave(userId);
 
     return res
       .status(200)
