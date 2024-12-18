@@ -505,7 +505,7 @@ const allowExtraDay = asyncHandler(async (req, res) => {
 
   try {
     const updateField =
-      type === "create" ? "isExtraDayForCreatedd" : "isExtraDayForApproved";
+      type === "create" ? "isExtraDayForCreated" : "isExtraDayForApproved";
 
     // Upsert the document: Create if not exists, update if exists
     const result = await TourPlan.findOneAndUpdate(
