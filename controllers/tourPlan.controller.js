@@ -85,8 +85,10 @@ const create = asyncHandler(async (req, res) => {
     tourPlans[year][month] = tourPlan;
 
     existingTourPlan.tourPlan = new Map(Object.entries(tourPlans));
-    existingTourPlan.isExtraDayForCreated = false;
-    existingTourPlan.isExtraDayForApproved = false;
+
+    // --- Update the isExtraDayForCreated and isExtraDayForApproved flags
+    // existingTourPlan.isExtraDayForCreated = false;
+    // existingTourPlan.isExtraDayForApproved = false;
 
     await existingTourPlan.save();
 
@@ -181,7 +183,6 @@ const update = asyncHandler(async (req, res) => {
       {
         $set: {
           [`tourPlan.${year}.${month}`]: updatedTourPlanList,
-          isExtraDayForCreated: false,
         },
       }
     );

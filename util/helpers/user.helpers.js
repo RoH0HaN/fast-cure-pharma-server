@@ -8,43 +8,74 @@ import mongoose from "mongoose";
 import { TourPlan } from "../../models/tourPlan.models.js";
 
 const initializeLeaveDocument = async (empId, dateOfJoining) => {
-  const joiningDate = dayjs(dateOfJoining, "YYYY-MM-DD");
-  const currentYearMarch31st = dayjs().year(dayjs().year()).month(2).date(31);
+  try {
+    const joiningDate = dayjs(dateOfJoining, "YYYY-MM-DD");
+    const currentYearMarch31st = dayjs().year(dayjs().year()).month(2).date(31);
 
-  let clCount = 0;
-  if (joiningDate.isAfter(currentYearMarch31st)) {
-    const nextMarch31st = dayjs()
-      .year(dayjs().year() + 1)
-      .month(2)
-      .date(31);
-    const daysTillMarch31st = nextMarch31st.diff(joiningDate, "days") + 1;
+    let clCount = 0;
+    if (joiningDate.isAfter(currentYearMarch31st)) {
+      const nextMarch31st = dayjs()
+        .year(dayjs().year() + 1)
+        .month(2)
+        .date(31);
+      const daysTillMarch31st = nextMarch31st.diff(joiningDate, "days") + 1;
 
-    clCount =
-      daysTillMarch31st >= 365
-        ? 14
-        : Math.floor((14 / 365) * daysTillMarch31st);
-  } else {
-    clCount = 14;
+      clCount =
+        daysTillMarch31st >= 365
+          ? 14
+          : Math.floor((14 / 365) * daysTillMarch31st);
+    } else {
+      clCount = 14;
+    }
+    await Leave.updateOne(
+      { empId },
+      {
+        empId,
+        updatedOn: dateOfJoining,
+        clCount,
+      },
+      { upsert: true }
+    );
+
+    return true;
+  } catch (error) {
+    Logger(error, "error");
+    return false;
   }
-  await Leave.updateOne(
-    { empId },
-    {
-      empId,
-      updatedOn: dateOfJoining,
-      clCount,
-    },
-    { upsert: true }
-  );
 };
 
 const initializeTourPlanDocument = async (empId) => {
-  await TourPlan.updateOne(
-    { empId },
-    {
-      empId,
-    },
-    { upsert: true }
-  );
+  try {
+    await TourPlan.updateOne(
+      { empId },
+      {
+        empId,
+      },
+      { upsert: true }
+    );
+
+    return true;
+  } catch (error) {
+    Logger(error, "error");
+    return false;
+  }
+};
+
+const initializeAttendanceDocument = async (empId) => {
+  try {
+    await Attendance.updateOne(
+      { empId },
+      {
+        empId,
+      },
+      { upsert: true }
+    );
+
+    return true;
+  } catch (error) {
+    Logger(error, "error");
+    return false;
+  }
 };
 
 const updateAttendanceOfHrOh = async (empId) => {
@@ -243,4 +274,5 @@ export {
   updateAttendanceOfHrOh,
   initializeLeaveDocument,
   initializeTourPlanDocument,
+  initializeAttendanceDocument,
 };

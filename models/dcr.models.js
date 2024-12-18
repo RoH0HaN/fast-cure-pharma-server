@@ -44,6 +44,11 @@ const doctorReportSchema = new Schema({
     ref: "User",
     default: null,
   },
+  workWithEmployeeName: {
+    type: String,
+    uppercase: true,
+    required: true,
+  },
   completedAt: {
     type: Date,
     default: null,
@@ -98,6 +103,11 @@ const csReportSchema = new Schema({
     ref: "User",
     default: null,
   },
+  workWithEmployeeName: {
+    type: String,
+    uppercase: true,
+    required: true,
+  },
   completedAt: {
     type: Date,
     default: null,
@@ -122,6 +132,11 @@ const trainingReportSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: "User",
     default: null,
+  },
+  workWithEmployeeName: {
+    type: String,
+    uppercase: true,
+    required: true,
   },
 });
 
