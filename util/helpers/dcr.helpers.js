@@ -187,7 +187,9 @@ const updateDvlDoctorLocation = async (dvlId, location) => {
     return false;
   } catch (error) {
     Logger(error, "error");
-    throw new Error("Failed to process the location check.");
+    throw new Error(
+      "Failed to process the location check while updating the DVL."
+    );
   }
 };
 
@@ -233,7 +235,9 @@ const getTotalTravelingDistanceFromDCRReport = async (
     return totalDistance;
   } catch (error) {
     Logger(`Error processing location check: ${error.message}`, "error");
-    throw new Error("Failed to process the location check.");
+    throw new Error(
+      "Failed to process the location check while calculating the total distance."
+    );
   }
 };
 
