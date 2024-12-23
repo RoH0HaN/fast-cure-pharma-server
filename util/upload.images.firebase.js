@@ -5,7 +5,7 @@ import util from "util";
 // Promisify fs.readFile to use async/await
 const readFileAsync = util.promisify(fs.readFile);
 
-async function uploadImageToFirebase(filePath, folderName = "folder_name") {
+async function uploadImageToFirebase(filePath, folderName = "work_images") {
   try {
     // Read the file from the file system
     const fileData = await readFileAsync(filePath);

@@ -362,7 +362,7 @@ const createTrainingReport = asyncHandler(async (req, res) => {
 
 //--- This API is for creating 'ADMIN DAY' reports. --->
 const createAdminDayReport = asyncHandler(async (req, res) => {
-  const { _id, name } = req.user;
+  const { _id, name, headquarter } = req.user;
   const { startLocation } = req.body;
 
   // Validate required fields
@@ -393,6 +393,7 @@ const createAdminDayReport = asyncHandler(async (req, res) => {
 
     const newReport = new DCR({
       createdBy: _id,
+      area: headquarter,
       workStatus: "ADMIN DAY",
       startLocation,
       endLocation: startLocation,

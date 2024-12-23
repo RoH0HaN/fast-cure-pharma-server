@@ -2,14 +2,12 @@ import firebase from "firebase/compat/app";
 import "firebase/compat/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA1SX5VE4gPyt9EKHDnt2U8KsyrrhfhlT0",
-  authDomain: "fir-310d6.firebaseapp.com",
-  databaseURL: "https://fir-310d6-default-rtdb.firebaseio.com",
-  projectId: "fir-310d6",
-  storageBucket: "fir-310d6.appspot.com",
-  messagingSenderId: "1014257585836",
-  appId: "1:1014257585836:web:f64796799a1c3788069909",
-  measurementId: "G-DQPM77WR3P",
+  apiKey: "AIzaSyCtG7Ax8DuD9NMtrsWw77Y1Un0dRHuQ-Fc",
+  authDomain: "fast-cure-pharma-storage.firebaseapp.com",
+  projectId: "fast-cure-pharma-storage",
+  storageBucket: "fast-cure-pharma-storage.firebasestorage.app",
+  messagingSenderId: "1077374136103",
+  appId: "1:1077374136103:web:b23dc4b60664ddadfc4302",
 };
 
 // -- Initialize Firebase
